@@ -1,0 +1,65 @@
+# clone_delayed.py
+# pip install requests beautifulsoup4
+
+import os
+import time
+import requests
+from urllib.parse import urlparse, urljoin
+from bs4 import BeautifulSoup
+
+def clone_website_delayed(url, delay=3):
+    try:
+        print(f"🔄 Подготовка к скачиванию сайта '{url}'...")
+        print(f"⏳ Ждём {delay} секунд, чтобы страница успела загрузиться...")
+        time.sleep(delay)  # задержка перед скачиванием
+
+        # Создаём папку для загрузки
+        domain = urlparse(url).netloc.replace(".", "_")
+        base_dir = os.path.join("downloads", domain)
+        os.makedirs(base_dir, exist_ok=True)
+        
+        # Получаем HTML
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        # Сохраняем HTML
+        html_path = os.path.join(base_dir, "index.html")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(soup.prettify())
+        print(f"✅ HTML сохранён: {html_path}")
+
+        # Функция для скачивания ресурсов
+        def download_resource(attr, folder):
+            tags = soup.find_all(lambda tag: tag.has_attr(attr))
+            for tag in tags:
+                link = tag[attr]
+                full_url = urljoin(url, link)
+                filename = os.path.basename(urlparse(full_url).path)
+                if not filename:
+                    continue
+                file_path = os.path.join(base_dir, folder, filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                try:
+                    r = requests.get(full_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                    with open(file_path, "wb") as f:
+                        f.write(r.content)
+                    print(f"  ✔ {folder}/{filename}")
+                except:
+                    print(f"  ❌ Не удалось скачать {full_url}")
+
+        print("📥 Начинаем скачивание ресурсов...")
+        download_resource("href", "css")
+        download_resource("src", "js")
+        download_resource("src", "images")
+
+        print(f"✅ Сайт '{url}' полностью сохранён в '{base_dir}'")
+
+    except Exception as e:
+        print(f"❌ Ошибка клонирования: {e}")
+
+# ----------------- Пример использования -----------------
+if __name__ == "__main__":
+    site_url = input("Введите URL сайта для клонирования: ").strip()
+    clone_website_delayed(site_url, delay=3)
+
