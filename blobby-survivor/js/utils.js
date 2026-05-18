@@ -108,4 +108,93 @@
 
   BS.makeRng = makeRng;
   BS.rng = makeRng((Date.now() & 0xffffffff) >>> 0);
+
+  // ----- Tiny capped particle system used for hit sparks. -----
+  var MAX_PARTICLES = 200;
+  var particles = [];
+
+  function spawnParticle(opts) {
+    if (particles.length >= MAX_PARTICLES) {
+      // Drop the oldest to keep within cap.
+      particles.shift();
+    }
+    var p = {
+      x: opts.x || 0,
+      y: opts.y || 0,
+      vx: opts.vx || 0,
+      vy: opts.vy || 0,
+      life: opts.life != null ? opts.life : 0.4,
+      maxLife: opts.life != null ? opts.life : 0.4,
+      radius: opts.radius != null ? opts.radius : 2,
+      color: opts.color || '#ffffff',
+      drag: opts.drag != null ? opts.drag : 0.05
+    };
+    particles.push(p);
+    return p;
+  }
+
+  function spawnHitSparks(x, y, color, count) {
+    var n = count || 4;
+    for (var i = 0; i < n; i++) {
+      var a = rand() * TAU;
+      var sp = 80 + rand() * 140;
+      spawnParticle({
+        x: x,
+        y: y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: 0.25 + rand() * 0.2,
+        radius: 1.5 + rand() * 1.5,
+        color: color || '#ffd9a8',
+        drag: 0.04
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+      var decay = Math.pow(p.drag, dt);
+      p.vx *= decay;
+      p.vy *= decay;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  function drawParticles(ctx) {
+    if (!ctx || particles.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var a = p.life / p.maxLife;
+      if (a < 0) a = 0;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function clearParticles() {
+    particles.length = 0;
+  }
+
+  BS.particles = {
+    spawn: spawnParticle,
+    spawnHitSparks: spawnHitSparks,
+    update: updateParticles,
+    draw: drawParticles,
+    clear: clearParticles,
+    list: particles
+  };
 })();
