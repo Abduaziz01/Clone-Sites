@@ -8,14 +8,32 @@
     elapsed: 0,
     nextSpawnIn: 0,
     nextBossIn: 120,
-    bossesSpawned: 0
+    bossesSpawned: 0,
+    lastMilestoneIdx: -1
   };
+
+  // Time-survived milestones in seconds.
+  var MILESTONES = [60, 120, 180, 300, 600];
+
+  function fmtMmSs(sec) {
+    var s = Math.floor(sec);
+    var mm = Math.floor(s / 60);
+    var ss = s % 60;
+    var mmStr = mm < 10 ? ('0' + mm) : ('' + mm);
+    var ssStr = ss < 10 ? ('0' + ss) : ('' + ss);
+    return mmStr + ':' + ssStr;
+  }
 
   function reset() {
     state.elapsed = 0;
     state.nextSpawnIn = 0;
     state.nextBossIn = 120;
     state.bossesSpawned = 0;
+    state.lastMilestoneIdx = -1;
+  }
+
+  function getElapsed() {
+    return state.elapsed;
   }
 
   function spawnInterval(t) {
@@ -102,6 +120,18 @@
       state.nextBossIn = 120;
       spawnBoss();
     }
+
+    // Milestone toasts: fire each at most once.
+    for (var k = state.lastMilestoneIdx + 1; k < MILESTONES.length; k++) {
+      if (state.elapsed >= MILESTONES[k]) {
+        state.lastMilestoneIdx = k;
+        if (BS.ui && typeof BS.ui.showToast === 'function') {
+          BS.ui.showToast('Survived ' + fmtMmSs(MILESTONES[k]) + '...', 2200);
+        }
+      } else {
+        break;
+      }
+    }
   }
 
   BS.spawner = {
@@ -110,6 +140,8 @@
     update: update,
     spawnInterval: spawnInterval,
     countPerSpawn: countPerSpawn,
-    pickType: pickType
+    pickType: pickType,
+    getElapsed: getElapsed,
+    MILESTONES: MILESTONES
   };
 })();

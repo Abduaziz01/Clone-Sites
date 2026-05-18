@@ -34,9 +34,9 @@
     } else if (scene === SCENE.PLAYING) {
       if (BS.ui && BS.ui.hideOverlay) BS.ui.hideOverlay();
     } else if (scene === SCENE.GAMEOVER) {
-      // FEAT-003 will wire a proper game-over screen.
-      if (BS.ui && BS.ui.hideOverlay) BS.ui.hideOverlay();
+      // Game-over overlay is shown by triggerGameOver() so it has access to stats.
     }
+    // LEVELUP overlay is opened by openLevelUp() with the rolled choices.
   }
 
   function resize() {
@@ -49,22 +49,25 @@
     if (BS.projectiles && BS.projectiles.clear) BS.projectiles.clear();
     if (BS.enemies && BS.enemies.clear) BS.enemies.clear();
     if (BS.particles && BS.particles.clear) BS.particles.clear();
+    if (BS.xp && BS.xp.clear) BS.xp.clear();
     if (BS.spawner && BS.spawner.reset) BS.spawner.reset();
+    if (BS.ui && BS.ui._resetActive) BS.ui._resetActive();
 
     if (BS.player && BS.player.createPlayer) {
       player = BS.player.createPlayer({ x: 0, y: 0 });
     }
+    player._pendingLevelUps = 0;
+    player._passiveStacks = {};
     camera.x = 0;
     camera.y = 0;
     shakeAmp = 0;
     shakeT = 0;
 
-    // Hook for enemy kills. FEAT-003 will spawn XP gems here.
+    // Hook for enemy kills: count + drop XP gem.
     if (BS.enemies) {
       BS.enemies.onKilled = function (e) {
         if (player) player.kills++;
         if (BS.xp && typeof BS.xp.onEnemyKilled === 'function') {
-          // Placeholder so FEAT-003 can plug in cleanly.
           BS.xp.onEnemyKilled(e);
         }
       };
@@ -95,6 +98,56 @@
     if (dur > shakeT) shakeT = dur;
   }
 
+  function buildGameOverStats() {
+    var elapsed = (BS.spawner && typeof BS.spawner.getElapsed === 'function')
+      ? BS.spawner.getElapsed()
+      : (BS.spawner && BS.spawner.state ? BS.spawner.state.elapsed : 0);
+    var ws = (BS.weapons && BS.weapons.summary && player) ? BS.weapons.summary(player) : [];
+    return {
+      timeSec: elapsed,
+      level: player ? player.level : 1,
+      kills: player ? player.kills : 0,
+      weapons: ws,
+      cause: 'You were swarmed.'
+    };
+  }
+
+  function triggerGameOver() {
+    setScene(SCENE.GAMEOVER);
+    if (BS.ui && BS.ui.showGameOver) {
+      BS.ui.showGameOver(buildGameOverStats(), startNewRun);
+    }
+  }
+
+  // Open a level-up card for the next pending event. Recurses (via onPick) until 0.
+  function openLevelUp() {
+    if (!player) return;
+    if (!BS.upgrades || !BS.upgrades.roll || !BS.ui || !BS.ui.showLevelUp) {
+      // Without an upgrade pool, just consume pending and resume.
+      player._pendingLevelUps = 0;
+      setScene(SCENE.PLAYING);
+      return;
+    }
+    setScene(SCENE.LEVELUP);
+    var choices = BS.upgrades.roll(player, 3);
+    BS.ui.showLevelUp(choices, function onPick(choice) {
+      try { choice.apply(player); } catch (e) { /* swallow */ }
+      if (BS.audio && BS.audio.playLevelUp) BS.audio.playLevelUp();
+      if (player._pendingLevelUps > 0) {
+        player._pendingLevelUps -= 1;
+        // If still more pending, re-open immediately with a fresh pool.
+        if (player._pendingLevelUps > 0) {
+          var next = BS.upgrades.roll(player, 3);
+          BS.ui.showLevelUp(next, onPick);
+          return;
+        }
+      }
+      // No more pending: resume.
+      if (BS.ui && BS.ui.hideOverlay) BS.ui.hideOverlay();
+      setScene(SCENE.PLAYING);
+    });
+  }
+
   function update(dt) {
     if (scene !== SCENE.PLAYING) return;
     if (!player) return;
@@ -106,6 +159,7 @@
     if (BS.weapons && BS.weapons.tickAll) BS.weapons.tickAll(player, dt, world);
     if (BS.projectiles && BS.projectiles.update) BS.projectiles.update(dt, world);
     if (BS.enemies && BS.enemies.update) BS.enemies.update(dt, world);
+    if (BS.xp && BS.xp.update) BS.xp.update(dt, player);
     if (BS.particles && BS.particles.update) BS.particles.update(dt);
 
     // Smoothly follow the player.
@@ -126,8 +180,16 @@
       shakeOffsetY = 0;
     }
 
+    // Death: open game over.
     if (!player.alive && scene === SCENE.PLAYING) {
-      setScene(SCENE.GAMEOVER);
+      triggerGameOver();
+      return;
+    }
+
+    // Level-up: open chooser one at a time.
+    if (player._pendingLevelUps && player._pendingLevelUps > 0 && scene === SCENE.PLAYING) {
+      player._pendingLevelUps -= 1;
+      openLevelUp();
     }
   }
 
@@ -187,12 +249,21 @@
 
     drawGrid();
 
+    if (BS.xp && BS.xp.draw) BS.xp.draw(ctx, camera);
     if (BS.enemies && BS.enemies.draw) BS.enemies.draw(ctx, camera);
     if (BS.projectiles && BS.projectiles.draw) BS.projectiles.draw(ctx, camera);
     if (player && BS.player && BS.player.draw) BS.player.draw(ctx, player, camera);
     if (BS.particles && BS.particles.draw) BS.particles.draw(ctx);
 
     ctx.restore();
+
+    // HUD updates each frame while we have a player (keeps bars/labels live during PAUSED/LEVELUP too).
+    if (BS.ui && BS.ui.renderHUD && player) {
+      var elapsed = (BS.spawner && typeof BS.spawner.getElapsed === 'function')
+        ? BS.spawner.getElapsed()
+        : (BS.spawner && BS.spawner.state ? BS.spawner.state.elapsed : 0);
+      BS.ui.renderHUD({ player: player, elapsedSec: elapsed, kills: player.kills });
+    }
   }
 
   function frame(ts) {
@@ -218,6 +289,7 @@
     for (var i = 0; i < ids.length; i++) {
       (function (idx) {
         BS.input.onKeyDown('Digit' + (idx + 1), function () {
+          if (scene !== SCENE.PLAYING) return; // don't fight LevelUp keys
           if (!player || !BS.weapons || !BS.weapons.grant) return;
           var res = BS.weapons.grant(player, ids[idx]);
           if (BS.ui && BS.ui.showToast) {
@@ -247,11 +319,11 @@
       if (scene === SCENE.TITLE) {
         if (BS.audio && BS.audio.init) BS.audio.init();
         startNewRun();
-      } else if (scene === SCENE.GAMEOVER) {
-        startNewRun();
       } else if (scene === SCENE.PAUSED) {
         setScene(SCENE.PLAYING);
       }
+      // GAMEOVER's Enter is handled by ui.js (activeRestart).
+      // LEVELUP's Enter activates the focused card via the browser.
     });
     BS.input.onBlur = function () {
       if (scene === SCENE.PLAYING) setScene(SCENE.PAUSED);

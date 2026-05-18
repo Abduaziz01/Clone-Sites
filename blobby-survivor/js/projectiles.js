@@ -41,7 +41,7 @@
     list.length = 0;
   }
 
-  function applyDamageToEnemy(enemy, proj) {
+  function applyDamageToEnemy(enemy, proj, world) {
     if (!enemy || enemy.dead) return false;
     var kx = 0, ky = 0;
     var d = dist(enemy.x, enemy.y, proj.x, proj.y);
@@ -50,14 +50,27 @@
       ky = (enemy.y - proj.y) / d;
     }
     var force = proj.knockback;
+    var dmg = proj.damage;
+    var isCrit = false;
+    var player = world && world.player;
+    if (proj.owner === 'player' && player && player.stats) {
+      var crc = player.stats.critChance || 0;
+      var crm = player.stats.critMul || 1.5;
+      if (crc > 0 && Math.random() < crc) {
+        dmg = dmg * crm;
+        isCrit = true;
+      }
+    }
     if (BS.enemies && BS.enemies.takeDamage) {
-      BS.enemies.takeDamage(enemy, proj.damage, { x: kx * force, y: ky * force });
+      BS.enemies.takeDamage(enemy, dmg, { x: kx * force, y: ky * force });
     } else {
-      enemy.hp -= proj.damage;
+      enemy.hp -= dmg;
       if (enemy.hp <= 0) enemy.dead = true;
     }
     if (BS.particles && BS.particles.spawnHitSparks) {
-      BS.particles.spawnHitSparks(enemy.x, enemy.y, proj.color, 3);
+      var sparkColor = isCrit ? '#fff36a' : proj.color;
+      var sparkCount = isCrit ? 6 : 3;
+      BS.particles.spawnHitSparks(enemy.x, enemy.y, sparkColor, sparkCount);
     }
     if (BS.audio && BS.audio.playHit) BS.audio.playHit();
     return true;
@@ -93,7 +106,7 @@
       var rr = e.radius + p.radius;
       var dx = e.x - p.x, dy = e.y - p.y;
       if (dx * dx + dy * dy <= rr * rr) {
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
         p.pierce--;
         if (p.pierce < 0) {
@@ -125,7 +138,7 @@
       var rr = e.radius + p.radius;
       var dx = e.x - p.x, dy = e.y - p.y;
       if (dx * dx + dy * dy <= rr * rr) {
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
       }
     }
@@ -158,7 +171,7 @@
         var hitY = data.originY + sa * Math.max(0, Math.min(data.len, along));
         p.x = hitX;
         p.y = hitY;
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
       }
     }
@@ -177,7 +190,7 @@
       var d = dist(e.x, e.y, data.originX, data.originY);
       // Thin ring of width 14.
       if (d <= data.curR + e.radius && d >= data.curR - 14 - e.radius) {
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
       }
     }
@@ -225,7 +238,7 @@
       var rr = e.radius + p.radius;
       var ex = e.x - p.x, ey = e.y - p.y;
       if (ex * ex + ey * ey <= rr * rr) {
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
       }
     }
@@ -268,7 +281,7 @@
       var rr = e.radius + p.radius;
       var hx = e.x - p.x, hy = e.y - p.y;
       if (hx * hx + hy * hy <= rr * rr) {
-        applyDamageToEnemy(e, p);
+        applyDamageToEnemy(e, p, world);
         p.hitSet.add(e);
         p.pierce--;
         if (p.pierce < 0) {
