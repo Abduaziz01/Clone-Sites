@@ -1,3 +1,4 @@
+// weapons.js: definitions for the six original auto-firing weapons, their level curves, and per-frame fire ticking.
 (function () {
   window.BS = window.BS || {};
 

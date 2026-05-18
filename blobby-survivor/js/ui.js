@@ -1,3 +1,4 @@
+// ui.js: HUD rendering and overlay screens (title, pause, level-up cards, game-over, toasts).
 (function () {
   window.BS = window.BS || {};
 

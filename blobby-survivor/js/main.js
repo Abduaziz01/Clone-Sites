@@ -1,3 +1,4 @@
+// main.js: canvas/camera setup, scene state machine, run lifecycle, and the requestAnimationFrame loop wiring all modules.
 (function () {
   window.BS = window.BS || {};
 

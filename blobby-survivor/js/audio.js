@@ -1,3 +1,4 @@
+// audio.js: lazy WebAudio SFX synthesis (shoot/hit/pickup/levelup/hurt/death) with a global mute toggle.
 (function () {
   window.BS = window.BS || {};
 

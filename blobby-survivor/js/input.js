@@ -1,3 +1,4 @@
+// input.js: keyboard state, normalized movement axis, one-shot key handlers, and window-blur auto-pause hook.
 (function () {
   window.BS = window.BS || {};
 

@@ -1,3 +1,4 @@
+// upgrades.js: upgrade pool (new weapons, weapon level-ups, passives) with weighted rolling for the level-up screen.
 (function () {
   window.BS = window.BS || {};
 

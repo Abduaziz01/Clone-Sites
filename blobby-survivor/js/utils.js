@@ -1,3 +1,4 @@
+// utils.js: shared math helpers, seedable RNG, and the capped hit/death particle system on the BS namespace.
 (function () {
   window.BS = window.BS || {};
 

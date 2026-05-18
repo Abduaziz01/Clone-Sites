@@ -1,3 +1,4 @@
+// projectiles.js: projectile pool with kinds shard/orb/whip/nova/boomerang/homing, hit resolution, and additive-glow rendering.
 (function () {
   window.BS = window.BS || {};
 

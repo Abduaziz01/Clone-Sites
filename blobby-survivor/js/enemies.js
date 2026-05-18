@@ -1,3 +1,4 @@
+// enemies.js: enemy types (Slime/Runner/Lurker/Brute/Husk), AI steering, contact damage, and rendering.
 (function () {
   window.BS = window.BS || {};
 

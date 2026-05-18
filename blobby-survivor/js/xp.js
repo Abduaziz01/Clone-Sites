@@ -1,3 +1,4 @@
+// xp.js: XP gem entities with magnet pickup, the XP-per-level curve, and the level-up event hook on the player.
 (function () {
   window.BS = window.BS || {};
 

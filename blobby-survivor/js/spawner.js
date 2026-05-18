@@ -1,3 +1,4 @@
+// spawner.js: time-scaling enemy spawner (off-screen placement, ramping weights, mini-boss every 2 minutes, milestone toasts).
 (function () {
   window.BS = window.BS || {};
 

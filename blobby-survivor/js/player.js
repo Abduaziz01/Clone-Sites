@@ -1,3 +1,4 @@
+// player.js: blob entity factory, stats block, movement/regen/iframes update, takeDamage, and rendering.
 (function () {
   window.BS = window.BS || {};
 
