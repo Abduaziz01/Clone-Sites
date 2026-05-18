@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PAC-MAN</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="arcade">
+        <header class="hud">
+            <div class="hud-block">
+                <div class="hud-label">1UP</div>
+                <div class="hud-value" id="score">00</div>
+            </div>
+            <div class="hud-block">
+                <div class="hud-label">HIGH SCORE</div>
+                <div class="hud-value" id="highScore">00</div>
+            </div>
+            <div class="hud-block">
+                <div class="hud-label">LEVEL</div>
+                <div class="hud-value" id="level">1</div>
+            </div>
+        </header>
+
+        <div class="game-wrapper">
+            <canvas id="game" width="448" height="496"></canvas>
+
+            <div class="overlay" id="overlay">
+                <h1 class="title">PAC-MAN</h1>
+                <p class="subtitle" id="overlayMsg">PRESS ENTER TO START</p>
+                <p class="hint">Arrow keys or WASD to move &middot; P to pause</p>
+            </div>
+        </div>
+
+        <footer class="hud-bottom">
+            <div class="lives" id="lives"></div>
+            <div class="hud-block">
+                <div class="hud-label">READY</div>
+                <div class="hud-value" id="status">--</div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
