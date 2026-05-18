@@ -21,7 +21,7 @@ Just open `index.html` in any modern browser. No install. No build. No server. I
 - Pick up Halo Orbs early. The orbiting damage gives you a panic ring that buys time when you get crowded.
 - Wide Pull (passive) is underrated. A bigger pickup radius means more XP per second and faster level-ups.
 - The Husk mini-boss arrives every 2 minutes. Save a clear lane for it: Pulse Shard and Seeker Mote chip it down well, while Shockwave thins the swarm trailing behind.
-- Damage stacks multiplicatively with attack speed. Mixing Sharp Spirit and Quick Reflex outscales pure damage stacking after level 10.
+- Damage stacks multiplicatively with cooldown reduction. Mixing Sharp Spirit and Quick Reflex outscales pure damage stacking after level 10.
 
 ## Tech notes
 

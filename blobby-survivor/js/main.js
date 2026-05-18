@@ -20,6 +20,7 @@
   // Camera shake state.
   var shakeAmp = 0;
   var shakeT = 0;
+  var shakeDur = 0.25;
   var shakeOffsetX = 0;
   var shakeOffsetY = 0;
 
@@ -63,6 +64,7 @@
     camera.y = 0;
     shakeAmp = 0;
     shakeT = 0;
+    shakeDur = 0.25;
 
     // Hook for enemy kills: count + drop XP gem.
     if (BS.enemies) {
@@ -96,7 +98,10 @@
 
   function shake(amp, dur) {
     if (amp > shakeAmp) shakeAmp = amp;
-    if (dur > shakeT) shakeT = dur;
+    if (dur > shakeT) {
+      shakeT = dur;
+      shakeDur = dur;
+    }
   }
 
   function buildGameOverStats() {
@@ -172,7 +177,8 @@
     if (shakeT > 0) {
       shakeT -= dt;
       if (shakeT < 0) shakeT = 0;
-      var amp = shakeAmp * (shakeT > 0 ? shakeT / 0.25 : 0);
+      var dur = shakeDur > 0 ? shakeDur : 0.25;
+      var amp = shakeAmp * (shakeT > 0 ? shakeT / dur : 0);
       shakeOffsetX = (Math.random() * 2 - 1) * amp;
       shakeOffsetY = (Math.random() * 2 - 1) * amp;
       if (shakeT === 0) shakeAmp = 0;
@@ -187,7 +193,10 @@
       return;
     }
 
-    // Level-up: open chooser one at a time.
+    // Level-up: open chooser one at a time. Multi-level-up bookkeeping is
+    // split between two consumers: this update() pulls the FIRST pending event
+    // off the counter and opens the level-up overlay, while openLevelUp's
+    // onPick callback below pulls each SUBSEQUENT one as the player picks.
     if (player._pendingLevelUps && player._pendingLevelUps > 0 && scene === SCENE.PLAYING) {
       player._pendingLevelUps -= 1;
       openLevelUp();
@@ -326,9 +335,9 @@
       // GAMEOVER's Enter is handled by ui.js (activeRestart).
       // LEVELUP's Enter activates the focused card via the browser.
     });
-    BS.input.onBlur = function () {
+    BS.input.onBlur(function () {
       if (scene === SCENE.PLAYING) setScene(SCENE.PAUSED);
-    };
+    });
     wireDebug();
   }
 

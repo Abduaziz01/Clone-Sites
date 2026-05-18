@@ -226,11 +226,16 @@
 
   function showLevelUp(choices, onPick) {
     var player = BS.game && BS.game.getPlayer ? BS.game.getPlayer() : null;
+    var n = (choices && choices.length) || 0;
     var html = '<div class="panel level-up">';
     html += '<h1 class="title">Level up!</h1>';
-    html += '<p class="subtitle">Choose an upgrade. Press 1, 2, or 3.</p>';
-    html += '<div class="level-up-grid">';
-    for (var i = 0; i < choices.length; i++) {
+    var promptKeys = '';
+    for (var pk = 0; pk < n; pk++) {
+      promptKeys += (pk > 0 ? (pk === n - 1 ? ', or ' : ', ') : '') + (pk + 1);
+    }
+    html += '<p class="subtitle">Choose an upgrade. Press ' + (promptKeys || '1') + '.</p>';
+    html += '<div class="level-up-grid level-up-grid-' + Math.max(1, n) + '">';
+    for (var i = 0; i < n; i++) {
       var c = choices[i];
       var kindClass = 'kind-' + (c.kind || 'passive');
       html += '<button class="level-up-card ' + kindClass + '" data-idx="' + i + '" type="button">';

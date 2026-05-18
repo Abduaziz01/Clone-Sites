@@ -93,9 +93,11 @@
       weaponEntry.state.orbs = [];
       var lvl = this.levels[Math.min(weaponEntry.level - 1, this.levels.length - 1)];
       var count = lvl.projectileCount + (player.stats.projectileCountBonus || 0);
-      var orbitR = lvl.extra.orbitR * (player.stats.areaMul || 1);
+      var baseOrbitR = lvl.extra.orbitR;
+      var orbitR = baseOrbitR * (player.stats.areaMul || 1);
       var orbitSpeed = lvl.extra.orbitSpeed;
-      var dmg = lvl.damage * (player.stats.damageMul || 1);
+      var baseDamage = lvl.damage;
+      var dmg = baseDamage * (player.stats.damageMul || 1);
       for (var k = 0; k < count; k++) {
         var ang = (k / count) * TAU;
         var orb = BS.projectiles.spawn({
@@ -111,7 +113,7 @@
           kind: 'orb',
           color: '#ffd271',
           glow: 'rgba(255, 210, 113, 0.7)',
-          data: { angle: ang, orbitR: orbitR, orbitSpeed: orbitSpeed }
+          data: { angle: ang, orbitR: orbitR, baseOrbitR: baseOrbitR, orbitSpeed: orbitSpeed, baseDamage: baseDamage }
         });
         weaponEntry.state.orbs.push(orb);
       }

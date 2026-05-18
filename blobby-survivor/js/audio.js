@@ -6,6 +6,7 @@
   var muted = false;
   var initialized = false;
   var failed = false;
+  var lastHitAt = 0;
 
   function ensureCtx() {
     if (initialized || failed) return ctx;
@@ -61,7 +62,14 @@
   }
 
   function playShoot()    { blip({ freq: 880, freqEnd: 440, dur: 0.08, type: 'square',   vol: 0.08 }); }
-  function playHit()      { blip({ freq: 220, freqEnd: 110, dur: 0.10, type: 'triangle', vol: 0.10 }); }
+  function playHit()      {
+    // Throttle hit SFX so dense crowds (Halo Orbs, novas) don't spawn dozens
+    // of oscillators per frame. 50ms ~= 20 hits/sec mixed audibly.
+    var t = (BS.utils && BS.utils.now) ? BS.utils.now() : Date.now();
+    if (t - lastHitAt < 50) return;
+    lastHitAt = t;
+    blip({ freq: 220, freqEnd: 110, dur: 0.10, type: 'triangle', vol: 0.10 });
+  }
   function playPickup()   { blip({ freq: 660, freqEnd: 990, dur: 0.10, type: 'sine',     vol: 0.10 }); }
   function playLevelUp()  { blip({ freq: 523, freqEnd: 1046,dur: 0.30, type: 'triangle', vol: 0.15 }); }
   function playHurt()     { blip({ freq: 200, freqEnd: 80,  dur: 0.18, type: 'sawtooth', vol: 0.12 }); }

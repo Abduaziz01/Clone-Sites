@@ -64,7 +64,6 @@ canvas#game {
     position: absolute;
     inset: 0 auto 0 0;
     width: 100%;
-    transition: width 0.15s linear;
 }
 
 .hp-fill {
@@ -249,6 +248,20 @@ canvas#game {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin-top: 8px;
+}
+
+.level-up-grid.level-up-grid-1 {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.level-up-grid.level-up-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .level-up-card {

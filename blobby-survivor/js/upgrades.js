@@ -243,8 +243,13 @@
       chosen.push(pick);
       used[pick.id] = true;
     }
-    while (chosen.length < n) {
+    // Fallback: pad with a single smallHeal if there's room. We deliberately
+    // don't pad further because three identical "Small Heal" cards looked
+    // broken in late-game rolls; the UI renders 1 or 2 cards centered when
+    // the pool is genuinely exhausted.
+    if (chosen.length < n && !used[smallHeal.id]) {
       chosen.push(smallHeal);
+      used[smallHeal.id] = true;
     }
     return chosen;
   }

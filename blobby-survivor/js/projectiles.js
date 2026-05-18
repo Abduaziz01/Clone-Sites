@@ -54,6 +54,12 @@
     var dmg = proj.damage;
     var isCrit = false;
     var player = world && world.player;
+    // Persistent orbs read damage from player.stats at hit time so passives
+    // picked up after the orbs spawned still apply.
+    if (proj.owner === 'player' && proj.kind === 'orb' &&
+        proj.data && proj.data.baseDamage != null && player && player.stats) {
+      dmg = proj.data.baseDamage * (player.stats.damageMul || 1);
+    }
     if (proj.owner === 'player' && player && player.stats) {
       var crc = player.stats.critChance || 0;
       var crm = player.stats.critMul || 1.5;
@@ -122,6 +128,11 @@
     var player = world.player;
     if (!player) return;
     var data = p.data;
+    // Live-recompute orbit radius from player.stats so passives picked up
+    // after the orbs spawned still apply.
+    if (data.baseOrbitR != null && player.stats) {
+      data.orbitR = data.baseOrbitR * (player.stats.areaMul || 1);
+    }
     data.angle += data.orbitSpeed * dt;
     p.x = player.x + Math.cos(data.angle) * data.orbitR;
     p.y = player.y + Math.sin(data.angle) * data.orbitR;
@@ -239,8 +250,17 @@
       var rr = e.radius + p.radius;
       var ex = e.x - p.x, ey = e.y - p.y;
       if (ex * ex + ey * ey <= rr * rr) {
-        applyDamageToEnemy(e, p, world);
-        p.hitSet.add(e);
+        // Decrement pierce: each per-level pierce value caps how many distinct
+        // enemies one boomerang throw can damage. The boomerang itself keeps
+        // flying (and returns) so it visually feels right; it just stops
+        // dealing damage once exhausted.
+        if (p.pierce >= 0) {
+          applyDamageToEnemy(e, p, world);
+          p.hitSet.add(e);
+          p.pierce--;
+        } else {
+          p.hitSet.add(e);
+        }
       }
     }
   }

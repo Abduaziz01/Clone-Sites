@@ -103,6 +103,13 @@
       var g = list[i];
       g.t += dt;
 
+      // Drop gems that have been orphaned for too long (e.g. enemies killed
+      // far from the player while kiting). 30s is plenty of time to wander back.
+      if (g.t > 30) {
+        list.splice(i, 1);
+        continue;
+      }
+
       var dx = player.x - g.x;
       var dy = player.y - g.y;
       var d2 = dx * dx + dy * dy;

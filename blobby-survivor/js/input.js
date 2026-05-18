@@ -4,7 +4,7 @@
 
   var held = new Set();
   var oneShotHandlers = {}; // code -> array of handlers
-  var blurHandler = null;
+  var blurHandlers = [];
 
   function isPressed(code) {
     return held.has(code);
@@ -28,6 +28,10 @@
   function onKeyDown(code, handler) {
     if (!oneShotHandlers[code]) oneShotHandlers[code] = [];
     oneShotHandlers[code].push(handler);
+  }
+
+  function onBlur(handler) {
+    if (typeof handler === 'function') blurHandlers.push(handler);
   }
 
   function fireOneShot(code) {
@@ -59,8 +63,8 @@
 
   window.addEventListener('blur', function () {
     held.clear();
-    if (typeof blurHandler === 'function') {
-      try { blurHandler(); } catch (e) { /* swallow */ }
+    for (var i = 0; i < blurHandlers.length; i++) {
+      try { blurHandlers[i](); } catch (e) { /* swallow */ }
     }
   });
 
@@ -69,7 +73,6 @@
     isPressed: isPressed,
     getAxis: getAxis,
     onKeyDown: onKeyDown,
-    set onBlur(fn) { blurHandler = fn; },
-    get onBlur() { return blurHandler; }
+    onBlur: onBlur
   };
 })();

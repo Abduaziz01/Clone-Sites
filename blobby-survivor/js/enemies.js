@@ -117,6 +117,26 @@
         }
       }
     }
+
+    // Cull enemies the player has out-paced. This is a cull, not a kill, so
+    // it does NOT call onKilled (no XP gem, no kill credit). Husks are bosses
+    // and remain on the field even if the player runs.
+    var canvas = (BS.game && BS.game.getCanvas) ? BS.game.getCanvas() : null;
+    var camera = (BS.game && BS.game.getCamera) ? BS.game.getCamera() : null;
+    if (canvas && camera) {
+      var maxDim = Math.max(canvas.width, canvas.height);
+      var cullDist = maxDim * 1.5;
+      var cullDist2 = cullDist * cullDist;
+      for (var c = list.length - 1; c >= 0; c--) {
+        var ec = list[c];
+        if (ec.type === 'husk') continue;
+        var ddx = ec.x - camera.x;
+        var ddy = ec.y - camera.y;
+        if (ddx * ddx + ddy * ddy > cullDist2) {
+          list.splice(c, 1);
+        }
+      }
+    }
   }
 
   function drawBlobBody(ctx, e, segs, jitter) {
