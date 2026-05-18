@@ -1,0 +1,204 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0e1320;
+    color: #e6efff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Helvetica, Arial, sans-serif;
+}
+
+canvas#game {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #0e1320;
+}
+
+/* HUD: fixed overlay, click-through unless explicitly enabled. */
+#hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    z-index: 5;
+}
+
+.hud-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.hud-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 240px;
+}
+
+.bar {
+    position: relative;
+    width: 260px;
+    max-width: 40vw;
+    height: 16px;
+    background: rgba(20, 28, 46, 0.75);
+    border: 1px solid rgba(140, 180, 230, 0.25);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 100%;
+    transition: width 0.15s linear;
+}
+
+.hp-fill {
+    background: linear-gradient(90deg, #ff5b6d, #ff9aa1);
+}
+
+.xp-fill {
+    background: linear-gradient(90deg, #6ad1ff, #b9f0ff);
+    width: 0%;
+}
+
+.bar-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+}
+
+.hud-stats {
+    display: flex;
+    gap: 18px;
+    color: #cfe1ff;
+    font-size: 13px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.1;
+}
+
+.stat-label {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #7ea3d6;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.weapons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Overlay: centered modal panel. */
+#overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 12, 22, 0.72);
+    backdrop-filter: blur(2px);
+    z-index: 10;
+    pointer-events: auto;
+    padding: 24px;
+}
+
+#overlay.hidden {
+    display: none;
+}
+
+.panel {
+    background: rgba(18, 26, 44, 0.92);
+    border: 1px solid rgba(140, 180, 230, 0.25);
+    border-radius: 14px;
+    padding: 28px 32px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.panel .title {
+    font-size: 32px;
+    color: #9be7ff;
+    letter-spacing: 2px;
+    text-shadow: 0 2px 8px rgba(50, 140, 200, 0.45);
+}
+
+.panel .subtitle {
+    font-size: 14px;
+    color: #b9c8e2;
+}
+
+.panel .hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #8aa2c7;
+    line-height: 1.6;
+}
+
+.button {
+    appearance: none;
+    border: 1px solid rgba(140, 220, 255, 0.45);
+    background: linear-gradient(180deg, #2c6fa0, #1a4a72);
+    color: #ffffff;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 6px 18px rgba(20, 60, 100, 0.4);
+}
+
+.button:hover {
+    background: linear-gradient(180deg, #3a87bf, #225e8a);
+}
+
+.button:active {
+    transform: translateY(1px);
+}
+
+.button:focus {
+    outline: 2px solid rgba(155, 231, 255, 0.7);
+    outline-offset: 2px;
+}
