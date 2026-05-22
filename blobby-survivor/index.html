@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blobby Survivor</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <canvas id="game"></canvas>
+
+    <div id="hud" aria-hidden="true">
+        <div class="hud-row hud-top">
+            <div class="hud-bars">
+                <div class="bar hp-bar">
+                    <div class="bar-fill hp-fill" id="hpFill"></div>
+                    <div class="bar-label" id="hpLabel">HP</div>
+                </div>
+                <div class="bar xp-bar">
+                    <div class="bar-fill xp-fill" id="xpFill"></div>
+                    <div class="bar-label" id="xpLabel">XP</div>
+                </div>
+            </div>
+            <div class="hud-stats">
+                <div class="stat"><span class="stat-label">Level</span><span class="stat-value" id="levelValue">1</span></div>
+                <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="timeValue">00:00</span></div>
+                <div class="stat"><span class="stat-label">Kills</span><span class="stat-value" id="killsValue">0</span></div>
+            </div>
+        </div>
+        <div class="hud-row hud-bottom">
+            <div class="weapons" id="weapons"></div>
+        </div>
+    </div>
+
+    <div id="overlay" class="hidden"></div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/projectiles.js"></script>
+    <script src="js/weapons.js"></script>
+    <script src="js/enemies.js"></script>
+    <script src="js/spawner.js"></script>
+    <script src="js/xp.js"></script>
+    <script src="js/upgrades.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
