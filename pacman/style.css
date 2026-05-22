@@ -130,12 +130,12 @@ canvas#game {
 .life {
     width: 18px;
     height: 18px;
-    background: radial-gradient(circle at 30% 30%, #ffd84d, #ffcc00 60%, #b88f00 100%);
+    background:
+        radial-gradient(circle at 30% 30%, #ffd84d, #ffcc00 60%, #b88f00 100%);
     border-radius: 50%;
-    clip-path: polygon(
-        100% 50%, 80% 30%, 65% 50%, 80% 70%
-    );
-    /* fallback simple circle if clip-path unsupported */
+    /* Carve a wedge mouth out of the right side */
+    -webkit-mask: conic-gradient(from -25deg at 50% 50%, transparent 0 50deg, #000 50deg 360deg);
+            mask: conic-gradient(from -25deg at 50% 50%, transparent 0 50deg, #000 50deg 360deg);
     box-shadow: 0 0 6px rgba(255, 204, 0, 0.6);
 }
 

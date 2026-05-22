@@ -1,63 +1,94 @@
 /* ============================================================
-   PAC-MAN CLONE
-   Classic 28x31 tile maze, 4 ghosts with personalities,
-   scatter/chase/frightened AI, dots, power pellets, scoring.
+   PAC-MAN CLONE — pure HTML/CSS/JS, no dependencies.
+   28x31 tile maze, 4 ghosts with personalities,
+   scatter/chase/frightened AI, dots, power pellets, scoring,
+   lives, levels, high score (localStorage), sound (WebAudio),
+   keyboard + touch controls.
    ============================================================ */
 
 (() => {
     'use strict';
 
     // ---------- Maze layout ----------
-    // 0 = empty (no dot, no wall)  -- corridor without dot (used for ghost house, tunnels)
-    // 1 = wall
-    // 2 = dot (pellet)
-    // 3 = power pellet
-    // 4 = ghost-house door (passable for ghosts only)
-    // 5 = tunnel / corridor empty
-    // Width 28, height 31 (classic).
+    // Legend per character:
+    //   # = wall
+    //   . = pellet (10 pts)
+    //   o = power pellet (50 pts)
+    //   - = ghost-house door (passable to ghosts only)
+    //   _ = empty corridor (no pellet) — used inside ghost house & tunnels
+    //   space = empty corridor outside the play field (for tunnel wrap)
+    //
+    // 28 columns wide, 31 rows tall (classic dimensions).
     const RAW_MAP = [
-        '1111111111111111111111111111',
-        '1222222222222112222222222221',
-        '1211112111112112111112111121',
-        '1311112111112112111112111131',
-        '1211112111112112111112111121',
-        '1222222222222222222222222221',
-        '1211112112111111112112111121',
-        '1211112112111111112112111121',
-        '1222222112222112222112222221',
-        '1111112111110110111112111111',
-        '0000012111110110111112100000',
-        '0000012112000000000112100000',
-        '0000012112011441100112100000',
-        '1111112112010000010112111111',
-        '5000000002010000010200000005',
-        '1111112112010000010112111111',
-        '0000012112011111100112100000',
-        '0000012112000000000112100000',
-        '0000012112011111100112100000',
-        '1111112112011111100112111111',
-        '1222222222222112222222222221',
-        '1211112111112112111112111121',
-        '1211112111112112111112111121',
-        '1322112222222002222222112231',
-        '1112112112111111112112112111',
-        '1112112112111111112112112111',
-        '1222222112222112222112222221',
-        '1211111111112112111111111121',
-        '1211111111112112111111111121',
-        '1222222222222222222222222221',
-        '1111111111111111111111111111'
+        '############################',
+        '#............##............#',
+        '#.####.#####.##.#####.####.#',
+        '#o####.#####.##.#####.####o#',
+        '#.####.#####.##.#####.####.#',
+        '#..........................#',
+        '#.####.##.########.##.####.#',
+        '#.####.##.########.##.####.#',
+        '#......##....##....##......#',
+        '######.##### ## #####.######',
+        '     #.##### ## #####.#     ',
+        '     #.##          ##.#     ',
+        '     #.## ###--### ##.#     ',
+        '######.## #______# ##.######',
+        '      .   #______#   .      ',
+        '######.## #______# ##.######',
+        '     #.## ######## ##.#     ',
+        '     #.##          ##.#     ',
+        '     #.## ######## ##.#     ',
+        '######.## ######## ##.######',
+        '#............##............#',
+        '#.####.#####.##.#####.####.#',
+        '#.####.#####.##.#####.####.#',
+        '#o..##................##..o#',
+        '###.##.##.########.##.##.###',
+        '###.##.##.########.##.##.###',
+        '#......##....##....##......#',
+        '#.##########.##.##########.#',
+        '#.##########.##.##########.#',
+        '#..........................#',
+        '############################'
     ];
 
     const COLS = 28;
     const ROWS = 31;
-    const TILE = 16;          // pixels per tile
-    const W = COLS * TILE;    // 448
-    const H = ROWS * TILE;    // 496
+    const TILE = 16;
+    const W = COLS * TILE;   // 448
+    const H = ROWS * TILE;   // 496
 
-    // Build mutable grid (numbers)
+    // Tile codes used in the in-memory grid
+    const T = {
+        EMPTY: 0,
+        WALL:  1,
+        PELLET: 2,
+        POWER: 3,
+        DOOR:  4,
+        TUNNEL: 5
+    };
+
     function buildGrid() {
-        return RAW_MAP.map(row => row.split('').map(Number));
+        const g = [];
+        for (let r = 0; r < ROWS; r++) {
+            const row = [];
+            const src = RAW_MAP[r];
+            for (let c = 0; c < COLS; c++) {
+                const ch = src[c] || ' ';
+                switch (ch) {
+                    case '#': row.push(T.WALL);  break;
+                    case '.': row.push(T.PELLET); break;
+                    case 'o': row.push(T.POWER); break;
+                    case '-': row.push(T.DOOR);  break;
+                    case '_': row.push(T.EMPTY); break;
+                    case ' ': row.push(T.TUNNEL); break;
+                    default:  row.push(T.EMPTY);
+                }
+            }
+            g.push(row);
+        }
+        return g;
     }
     let grid = buildGrid();
 
@@ -69,7 +100,7 @@
 
     // ---------- DOM ----------
     const scoreEl = document.getElementById('score');
-    const highEl = document.getElementById('highScore');
+    const highEl  = document.getElementById('highScore');
     const levelEl = document.getElementById('level');
     const livesEl = document.getElementById('lives');
     const statusEl = document.getElementById('status');
@@ -94,16 +125,16 @@
         level: 1,
         lives: 3,
         dotsRemaining: 0,
-        frightenedTimer: 0,    // ms remaining on power pellet
-        modeTimer: 0,          // ms remaining in current scatter/chase phase
-        modeIndex: 0,          // index into MODE_SCHEDULE
-        ghostMode: 'scatter',  // current mode (scatter|chase) — frightened overrides
-        ghostsEatenInPower: 0, // for compounding score (200,400,800,1600)
-        readyTimer: 0,         // countdown before Pac-Man can move
+        frightenedTimer: 0,
+        modeTimer: 0,
+        modeIndex: 0,
+        ghostMode: 'scatter',
+        ghostsEatenInPower: 0,
+        readyTimer: 0,
         dyingTimer: 0
     };
 
-    // Mode schedule (ms): scatter / chase alternation, classic level 1 timings
+    // Classic-ish scatter/chase schedule (ms)
     const MODE_SCHEDULE = [
         { mode: 'scatter', dur: 7000 },
         { mode: 'chase',   dur: 20000 },
@@ -135,30 +166,29 @@
     }
     function isWall(c, r) {
         if (r < 0 || r >= ROWS) return true;
-        // Tunnel wrap: out-of-bounds c is a corridor
-        if (c < 0 || c >= COLS) return false;
-        const v = grid[r][c];
-        return v === 1;
+        if (c < 0 || c >= COLS) return false; // tunnel wrap = open
+        return grid[r][c] === T.WALL;
     }
     function isGhostDoor(c, r) {
         if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
-        return grid[r][c] === 4;
+        return grid[r][c] === T.DOOR;
     }
     function tileCenter(c, r) {
         return { x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 };
     }
 
-    // ---------- Entities ----------
+    // ---------- Pac-Man ----------
     class Pacman {
         constructor() { this.reset(); }
         reset() {
-            const start = tileCenter(13, 23);
-            // Pac-Man starts between columns 13 and 14
-            this.x = start.x + TILE / 2;
-            this.y = start.y;
+            // Classic Pac-Man spawn: between cols 13 & 14 on row 23.
+            // Place him exactly on the boundary so he can go left or right
+            // immediately without eating a pellet on spawn.
+            this.x = 14 * TILE;          // boundary between cols 13 & 14
+            this.y = 23 * TILE + TILE / 2;
             this.dir = DIR.NONE;
             this.next = DIR.LEFT;
-            this.speed = 75; // px/sec — base
+            this.speed = 80;             // px/sec base
             this.mouth = 0;
             this.mouthDir = 1;
             this.dead = false;
@@ -168,11 +198,9 @@
 
         canMove(dir) {
             if (dir === DIR.NONE) return true;
-            // Look ahead from the tile the head will enter
-            const cx = this.x + dir.x * (TILE / 2);
-            const cy = this.y + dir.y * (TILE / 2);
+            const cx = this.x + dir.x * (TILE / 2 + 0.1);
+            const cy = this.y + dir.y * (TILE / 2 + 0.1);
             const t = tileAt(cx, cy);
-            // For perpendicular turns, only allow when centered on tile
             return !isWall(t.c, t.r) && !isGhostDoor(t.c, t.r);
         }
 
@@ -188,13 +216,11 @@
                 return;
             }
 
-            // Try to honor queued direction when possible
+            // Honor queued direction.
             if (this.next !== this.dir) {
-                // Allow reverse instantly
                 if (this.next === opposite(this.dir)) {
                     this.dir = this.next;
                 } else if (this.atTileCenter(2) && this.canMove(this.next)) {
-                    // snap to center then turn
                     const t = tileAt(this.x, this.y);
                     const c = tileCenter(t.c, t.r);
                     this.x = c.x; this.y = c.y;
@@ -203,7 +229,6 @@
             }
 
             if (!this.canMove(this.dir)) {
-                // align to center if blocked
                 if (this.atTileCenter(3)) {
                     const t = tileAt(this.x, this.y);
                     const c = tileCenter(t.c, t.r);
@@ -232,20 +257,20 @@
             const r = TILE * 0.55;
 
             if (this.dead) {
-                // Death animation: shrinking arc
                 const p = Math.min(1, this.deathFrame / 4);
                 const open = p * Math.PI;
                 ctx.fillStyle = '#ffcc00';
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
-                ctx.arc(0, 0, r * (1 - p * 0.4), -Math.PI / 2 + open, -Math.PI / 2 - open + Math.PI * 2);
+                ctx.arc(0, 0, r * (1 - p * 0.4),
+                        -Math.PI / 2 + open,
+                        -Math.PI / 2 - open + Math.PI * 2);
                 ctx.closePath();
                 ctx.fill();
                 ctx.restore();
                 return;
             }
 
-            // Rotate based on direction
             let angle = 0;
             if (this.dir === DIR.LEFT)  angle = Math.PI;
             if (this.dir === DIR.UP)    angle = -Math.PI / 2;
@@ -263,25 +288,27 @@
         }
     }
 
+    // ---------- Ghost ----------
     class Ghost {
-        constructor(name, color, scatterTarget, startTile, exitDelay) {
+        constructor(name, color, scatterTarget, startTile, exitDelay, startsOut = false) {
             this.name = name;
             this.color = color;
             this.scatterTarget = scatterTarget; // {c,r}
-            this.startTile = startTile;         // spawn tile
-            this.exitDelay = exitDelay;         // ms before leaving house
+            this.startTile = startTile;
+            this.exitDelay = exitDelay;
+            this.startsOut = startsOut;
             this.reset();
         }
         reset() {
             const c = tileCenter(this.startTile.c, this.startTile.r);
             this.x = c.x; this.y = c.y;
-            this.dir = DIR.UP;
-            this.speed = 70;
-            this.state = this.name === 'blinky' ? 'out' : 'house'; // blinky starts out
+            this.dir = this.startsOut ? DIR.LEFT : DIR.UP;
+            this.state = this.startsOut ? 'out' : 'house';
             this.houseTimer = this.exitDelay;
             this.frightened = false;
-            this.eaten = false; // returning to house as eyes
+            this.eaten = false;
             this.bobPhase = Math.random() * Math.PI * 2;
+            this.bobOriginY = this.y;
         }
 
         get tile() { return tileAt(this.x, this.y); }
@@ -294,39 +321,33 @@
 
         canEnter(c, r) {
             if (r < 0 || r >= ROWS) return false;
-            // Tunnel wrap
-            if (c < 0 || c >= COLS) return true;
+            if (c < 0 || c >= COLS) return true; // tunnel wrap
             const v = grid[r][c];
-            if (v === 1) return false;
-            if (v === 4) {
-                // Door: only allowed when leaving or returning to house
-                return this.state === 'leaving' || this.state === 'returning' || this.state === 'house';
+            if (v === T.WALL) return false;
+            if (v === T.DOOR) {
+                return this.state === 'leaving' ||
+                       this.state === 'returning' ||
+                       this.state === 'house';
             }
             return true;
         }
 
-        // Compute target tile based on state
         getTarget(pac, blinky) {
-            if (this.eaten) return { c: 13, r: 14 }; // house entrance
+            if (this.eaten) return { c: 13, r: 11 }; // tile just above the door
             if (this.frightened) return null;
-
             if (game.ghostMode === 'scatter') return this.scatterTarget;
 
-            // Chase mode — personality
             const pt = pac.tile;
             switch (this.name) {
                 case 'blinky':
                     return { c: pt.c, r: pt.r };
                 case 'pinky': {
-                    // 4 tiles ahead of pac
                     let c = pt.c + pac.dir.x * 4;
                     let r = pt.r + pac.dir.y * 4;
-                    // Replicate original bug: when up, also offset left by 4
-                    if (pac.dir === DIR.UP) c -= 4;
+                    if (pac.dir === DIR.UP) c -= 4; // classic overflow bug
                     return { c, r };
                 }
                 case 'inky': {
-                    // 2 tiles ahead of pac, then double vector from blinky
                     let c2 = pt.c + pac.dir.x * 2;
                     let r2 = pt.r + pac.dir.y * 2;
                     if (pac.dir === DIR.UP) c2 -= 2;
@@ -336,17 +357,15 @@
                 case 'clyde': {
                     const dx = this.tile.c - pt.c;
                     const dy = this.tile.r - pt.r;
-                    const distSq = dx * dx + dy * dy;
-                    return distSq > 64 ? { c: pt.c, r: pt.r } : this.scatterTarget;
+                    return (dx * dx + dy * dy) > 64
+                        ? { c: pt.c, r: pt.r }
+                        : this.scatterTarget;
                 }
             }
             return { c: pt.c, r: pt.r };
         }
 
         chooseDirection(target) {
-            // Standard pac-man ghost AI: at each tile center, evaluate the
-            // 4 neighbors (excluding reverse) and pick the one minimizing
-            // straight-line distance to target. Frightened => random.
             const t = this.tile;
             const candidates = [];
             const dirs = [DIR.UP, DIR.LEFT, DIR.DOWN, DIR.RIGHT]; // tie-break order
@@ -358,16 +377,13 @@
                 candidates.push({ d, nc, nr });
             }
             if (candidates.length === 0) {
-                // Forced reverse
                 this.dir = opposite(this.dir);
                 return;
             }
-
             if (this.frightened && !this.eaten) {
                 this.dir = candidates[Math.floor(Math.random() * candidates.length)].d;
                 return;
             }
-
             let best = candidates[0];
             let bestDist = Infinity;
             for (const cand of candidates) {
@@ -382,37 +398,35 @@
         update(dt, pac, blinky) {
             this.bobPhase += dt * 6;
 
-            // Speed determination
+            // Speed
             let speed = 70 + (game.level - 1) * 2;
             if (this.frightened) speed *= 0.6;
-            if (this.eaten) speed = 140;
-            // Tunnel slowdown
+            if (this.eaten) speed = 150;
             const t = this.tile;
             if (t.r === 14 && (t.c < 6 || t.c > 21)) speed *= 0.5;
 
-            // House logic
+            // Door tile target = column 13.5 (between 13 & 14), row 11.5 (just above door)
+            const doorX = 14 * TILE;
+            const doorOutsideY = 11 * TILE + TILE / 2;
+            const houseY = 14 * TILE + TILE / 2;
+
             if (this.state === 'house') {
-                // Bob up and down inside the house
-                this.y += Math.sin(this.bobPhase) * 0.5;
+                // Bob inside house
+                this.y = this.bobOriginY + Math.sin(this.bobPhase) * 2;
                 this.houseTimer -= dt * 1000;
-                if (this.houseTimer <= 0 || game.frightenedTimer > 0 && false) {
-                    this.state = 'leaving';
-                }
+                if (this.houseTimer <= 0) this.state = 'leaving';
                 return;
             }
             if (this.state === 'leaving') {
-                // Move to door tile (13.5, 14) center
-                const tx = 13 * TILE + TILE; // boundary between cols 13 & 14
-                const ty = 14 * TILE + TILE / 2;
-                // first center horizontally
-                if (Math.abs(this.x - tx) > 1) {
-                    this.x += Math.sign(tx - this.x) * speed * dt;
+                // Center horizontally to door, then move up out of the house
+                if (Math.abs(this.x - doorX) > 1) {
+                    this.x += Math.sign(doorX - this.x) * speed * dt;
                 } else {
-                    this.x = tx;
-                    if (this.y > ty) {
+                    this.x = doorX;
+                    if (this.y > doorOutsideY) {
                         this.y -= speed * dt;
                     } else {
-                        this.y = ty;
+                        this.y = doorOutsideY;
                         this.state = 'out';
                         this.dir = Math.random() < 0.5 ? DIR.LEFT : DIR.RIGHT;
                     }
@@ -420,11 +434,9 @@
                 return;
             }
             if (this.state === 'returning') {
-                // Move toward door (13.5, 14)
-                const tx = 13 * TILE + TILE;
-                const ty = 14 * TILE + TILE / 2;
-                const dx = tx - this.x;
-                const dy = ty - this.y;
+                // Move toward door from above
+                const tx = doorX, ty = doorOutsideY;
+                const dx = tx - this.x, dy = ty - this.y;
                 const d = Math.hypot(dx, dy);
                 if (d < 2) {
                     this.x = tx; this.y = ty;
@@ -436,37 +448,30 @@
                 return;
             }
             if (this.state === 'entering') {
-                // Drop into the house, then resume
-                const targetY = 17 * TILE - TILE / 2; // mid house
-                if (this.y < targetY) {
+                if (this.y < houseY) {
                     this.y += speed * dt;
                 } else {
-                    this.y = targetY;
+                    this.y = houseY;
                     this.eaten = false;
                     this.frightened = false;
+                    this.bobOriginY = this.y;
                     this.state = 'leaving';
-                    this.houseTimer = 800;
+                    this.houseTimer = 600;
                 }
                 return;
             }
 
-            // state === 'out' — normal corridor movement
-            // Decide direction at tile center
+            // 'out' — corridor movement
             if (this.atTileCenter(1.5)) {
                 const tc = tileCenter(t.c, t.r);
                 this.x = tc.x; this.y = tc.y;
                 const target = this.getTarget(pac, blinky);
-                if (target) this.chooseDirection(target);
-                else {
-                    // frightened (random) — chooseDirection handles it but it needs target null check
-                    this.chooseDirection({ c: 0, r: 0 });
-                }
+                this.chooseDirection(target || { c: 0, r: 0 });
             }
 
             this.x += this.dir.x * speed * dt;
             this.y += this.dir.y * speed * dt;
 
-            // Tunnel wrap
             if (this.x < -TILE / 2) this.x = W + TILE / 2 - 1;
             else if (this.x > W + TILE / 2) this.x = -TILE / 2 + 1;
         }
@@ -477,21 +482,20 @@
             ctx.translate(this.x, this.y);
 
             if (this.eaten) {
-                // Just eyes
                 drawEyes(this.dir);
                 ctx.restore();
                 return;
             }
 
-            // Body color
             let body = this.color;
             if (this.frightened) {
-                const flashing = game.frightenedTimer < 2000 && Math.floor(game.frightenedTimer / 200) % 2 === 0;
+                const flashing = game.frightenedTimer < 2000 &&
+                                 Math.floor(game.frightenedTimer / 200) % 2 === 0;
                 body = flashing ? '#ffffff' : '#2121de';
             }
-            ctx.fillStyle = body;
 
-            // Rounded top
+            ctx.fillStyle = body;
+            // Top dome
             ctx.beginPath();
             ctx.arc(0, -2, r, Math.PI, 0, false);
             // Skirt with 3 humps
@@ -510,16 +514,18 @@
             ctx.fill();
 
             if (this.frightened) {
-                // Scared face
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(-5, -3, 3, 3);
                 ctx.fillRect(2, -3, 3, 3);
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                for (let i = -5; i <= 5; i += 2) {
-                    ctx.lineTo(i, 4 + (i % 4 === 0 ? 0 : 2));
-                }
+                ctx.moveTo(-5, 4);
+                ctx.lineTo(-3, 2);
+                ctx.lineTo(-1, 4);
+                ctx.lineTo(1, 2);
+                ctx.lineTo(3, 4);
+                ctx.lineTo(5, 2);
                 ctx.stroke();
             } else {
                 drawEyes(this.dir);
@@ -529,36 +535,37 @@
     }
 
     function drawEyes(dir) {
-        // White
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(-3, -2, 2.6, 0, Math.PI * 2);
         ctx.arc(3, -2, 2.6, 0, Math.PI * 2);
         ctx.fill();
-        // Pupils
         let px = 0, py = 0;
         if (dir === DIR.LEFT)  px = -1.2;
-        if (dir === DIR.RIGHT) px = 1.2;
+        if (dir === DIR.RIGHT) px =  1.2;
         if (dir === DIR.UP)    py = -1.2;
-        if (dir === DIR.DOWN)  py = 1.2;
+        if (dir === DIR.DOWN)  py =  1.2;
         ctx.fillStyle = '#0033ff';
         ctx.beginPath();
         ctx.arc(-3 + px, -2 + py, 1.3, 0, Math.PI * 2);
-        ctx.arc(3 + px, -2 + py, 1.3, 0, Math.PI * 2);
+        ctx.arc( 3 + px, -2 + py, 1.3, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // ---------- Create entities ----------
+    // ---------- Entities ----------
     const pac = new Pacman();
+    // Ghost-house interior tiles. Door is on row 12 (the '-' chars).
+    // House interior spans roughly cols 11..16, rows 13..15.
     const ghosts = [
-        new Ghost('blinky', '#ff0000', { c: 25, r: 0 }, { c: 13, r: 14 }, 0),
-        new Ghost('pinky',  '#ffb8ff', { c: 2,  r: 0 }, { c: 13, r: 17 }, 2000),
-        new Ghost('inky',   '#00ffff', { c: 27, r: 30 }, { c: 11, r: 17 }, 5000),
-        new Ghost('clyde',  '#ffb851', { c: 0,  r: 30 }, { c: 15, r: 17 }, 8000)
+        // Blinky starts above the house, already 'out'
+        new Ghost('blinky', '#ff0000', { c: 25, r: 0 },  { c: 13, r: 11 }, 0,    true),
+        new Ghost('pinky',  '#ffb8ff', { c: 2,  r: 0 },  { c: 13, r: 14 }, 1500, false),
+        new Ghost('inky',   '#00ffff', { c: 27, r: 30 }, { c: 11, r: 14 }, 4000, false),
+        new Ghost('clyde',  '#ffb851', { c: 0,  r: 30 }, { c: 16, r: 14 }, 7000, false)
     ];
     const blinky = ghosts[0];
 
-    // ---------- Sound (Web Audio) ----------
+    // ---------- Web Audio ----------
     let audioCtx = null;
     function ensureAudio() {
         if (!audioCtx) {
@@ -579,37 +586,26 @@
         o.start(t);
         g.gain.setValueAtTime(vol, t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        o.stop(t + dur);
+        o.stop(t + dur + 0.02);
     }
     let chompToggle = 0;
-    function sndChomp() { ensureAudio(); beep(chompToggle++ % 2 ? 520 : 380, 0.05, 'square', 0.04); }
-    function sndPower() { ensureAudio(); beep(180, 0.12, 'sawtooth', 0.08); setTimeout(() => beep(280, 0.12, 'sawtooth', 0.08), 100); }
+    function sndChomp()    { ensureAudio(); beep(chompToggle++ % 2 ? 520 : 380, 0.05, 'square', 0.04); }
+    function sndPower()    { ensureAudio(); beep(180, 0.12, 'sawtooth', 0.08); setTimeout(() => beep(280, 0.12, 'sawtooth', 0.08), 100); }
     function sndEatGhost() { ensureAudio(); beep(700, 0.08); setTimeout(() => beep(900, 0.08), 80); setTimeout(() => beep(1200, 0.12), 160); }
-    function sndDeath() {
-        ensureAudio();
-        for (let i = 0; i < 8; i++) {
-            setTimeout(() => beep(700 - i * 70, 0.12, 'square', 0.08), i * 120);
-        }
-    }
-    function sndStart() {
-        ensureAudio();
-        const notes = [523, 659, 784, 1046];
-        notes.forEach((n, i) => setTimeout(() => beep(n, 0.15, 'square', 0.06), i * 150));
-    }
+    function sndDeath()    { ensureAudio(); for (let i = 0; i < 8; i++) setTimeout(() => beep(700 - i * 70, 0.12, 'square', 0.08), i * 120); }
+    function sndStart()    { ensureAudio(); [523, 659, 784, 1046].forEach((n, i) => setTimeout(() => beep(n, 0.15, 'square', 0.06), i * 150)); }
 
-    // ---------- Initialization helpers ----------
+    // ---------- Init helpers ----------
     function countDots() {
         let n = 0;
         for (let r = 0; r < ROWS; r++)
             for (let c = 0; c < COLS; c++)
-                if (grid[r][c] === 2 || grid[r][c] === 3) n++;
+                if (grid[r][c] === T.PELLET || grid[r][c] === T.POWER) n++;
         return n;
     }
 
     function resetLevel(fullReset = false) {
-        if (fullReset) {
-            grid = buildGrid();
-        }
+        if (fullReset) grid = buildGrid();
         pac.reset();
         ghosts.forEach(g => g.reset());
         game.dotsRemaining = countDots();
@@ -652,7 +648,6 @@
             }
             showOverlay('GAME OVER', `SCORE ${game.score} — PRESS ENTER`);
         } else {
-            // soft reset positions
             pac.reset();
             ghosts.forEach(g => g.reset());
             game.frightenedTimer = 0;
@@ -665,7 +660,7 @@
     // ---------- HUD ----------
     function updateHUD() {
         scoreEl.textContent = String(game.score).padStart(2, '0');
-        highEl.textContent = String(Math.max(game.score, game.high)).padStart(2, '0');
+        highEl.textContent  = String(Math.max(game.score, game.high)).padStart(2, '0');
         levelEl.textContent = String(game.level);
         livesEl.innerHTML = '';
         for (let i = 0; i < game.lives; i++) {
@@ -703,16 +698,15 @@
             }
             return;
         }
-
         if (game.state !== STATE.PLAYING && game.state !== STATE.READY) return;
 
-        if (k === 'arrowleft' || k === 'a')  pac.next = DIR.LEFT;
-        else if (k === 'arrowright' || k === 'd') pac.next = DIR.RIGHT;
-        else if (k === 'arrowup' || k === 'w')    pac.next = DIR.UP;
-        else if (k === 'arrowdown' || k === 's')  pac.next = DIR.DOWN;
+        if (k === 'arrowleft' || k === 'a')       { pac.next = DIR.LEFT;  e.preventDefault(); }
+        else if (k === 'arrowright' || k === 'd') { pac.next = DIR.RIGHT; e.preventDefault(); }
+        else if (k === 'arrowup' || k === 'w')    { pac.next = DIR.UP;    e.preventDefault(); }
+        else if (k === 'arrowdown' || k === 's')  { pac.next = DIR.DOWN;  e.preventDefault(); }
     });
 
-    // Touch / swipe controls
+    // Touch / swipe
     let touchStart = null;
     canvas.addEventListener('touchstart', e => {
         const t = e.changedTouches[0];
@@ -723,27 +717,25 @@
         const t = e.changedTouches[0];
         const dx = t.clientX - touchStart.x;
         const dy = t.clientY - touchStart.y;
-        if (Math.abs(dx) > Math.abs(dy)) {
-            pac.next = dx > 0 ? DIR.RIGHT : DIR.LEFT;
-        } else {
-            pac.next = dy > 0 ? DIR.DOWN : DIR.UP;
-        }
+        if (Math.abs(dx) > Math.abs(dy)) pac.next = dx > 0 ? DIR.RIGHT : DIR.LEFT;
+        else                              pac.next = dy > 0 ? DIR.DOWN  : DIR.UP;
         touchStart = null;
+        if (game.state === STATE.MENU || game.state === STATE.GAMEOVER) startGame();
     }, { passive: true });
 
-    // ---------- Collision logic ----------
+    // ---------- Pellet & ghost collisions ----------
     function eatPellets() {
         const t = pac.tile;
         if (t.c < 0 || t.c >= COLS || t.r < 0 || t.r >= ROWS) return;
         const v = grid[t.r][t.c];
-        if (v === 2) {
-            grid[t.r][t.c] = 0;
+        if (v === T.PELLET) {
+            grid[t.r][t.c] = T.EMPTY;
             game.score += 10;
             game.dotsRemaining--;
             sndChomp();
             updateHUD();
-        } else if (v === 3) {
-            grid[t.r][t.c] = 0;
+        } else if (v === T.POWER) {
+            grid[t.r][t.c] = T.EMPTY;
             game.score += 50;
             game.dotsRemaining--;
             game.frightenedTimer = Math.max(7000 - (game.level - 1) * 500, 2000);
@@ -751,14 +743,12 @@
             ghosts.forEach(g => {
                 if (!g.eaten && g.state === 'out') {
                     g.frightened = true;
-                    // reverse direction
                     g.dir = opposite(g.dir);
                 }
             });
             sndPower();
             updateHUD();
         }
-
         if (game.dotsRemaining <= 0) {
             game.state = STATE.WIN;
             statusEl.textContent = 'CLEAR!';
@@ -768,7 +758,8 @@
 
     function checkGhostCollisions() {
         for (const g of ghosts) {
-            if (g.state === 'house' || g.state === 'leaving' || g.state === 'returning' || g.state === 'entering') continue;
+            if (g.state === 'house' || g.state === 'leaving' ||
+                g.state === 'returning' || g.state === 'entering') continue;
             const dx = g.x - pac.x;
             const dy = g.y - pac.y;
             if (dx * dx + dy * dy < (TILE * 0.55) ** 2) {
@@ -792,34 +783,29 @@
         }
     }
 
-    // ---------- Render maze ----------
+    // ---------- Maze rendering ----------
     function drawMaze() {
-        // Walls — draw blue thick lines for each wall tile boundary against non-wall
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const v = grid[r][c];
                 const x = c * TILE, y = r * TILE;
-                if (v === 1) {
-                    // Stylized: filled wall block w/ inner blue
+                if (v === T.WALL) {
                     ctx.fillStyle = '#0a0a4f';
                     ctx.fillRect(x, y, TILE, TILE);
                     ctx.strokeStyle = '#2121de';
                     ctx.lineWidth = 2;
                     ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
-                } else if (v === 4) {
-                    // Ghost door
+                } else if (v === T.DOOR) {
                     ctx.fillStyle = '#000';
                     ctx.fillRect(x, y, TILE, TILE);
                     ctx.fillStyle = '#ffb8ff';
                     ctx.fillRect(x, y + TILE / 2 - 1, TILE, 2);
-                } else if (v === 2) {
-                    // Dot
+                } else if (v === T.PELLET) {
                     ctx.fillStyle = '#ffb897';
                     ctx.beginPath();
                     ctx.arc(x + TILE / 2, y + TILE / 2, 2, 0, Math.PI * 2);
                     ctx.fill();
-                } else if (v === 3) {
-                    // Power pellet — pulsing
+                } else if (v === T.POWER) {
                     const pulse = 4 + Math.sin(performance.now() / 150) * 1.2;
                     ctx.fillStyle = '#ffb897';
                     ctx.beginPath();
@@ -839,7 +825,7 @@
                 ghosts.forEach(g => { if (!g.eaten) g.frightened = false; });
                 game.ghostsEatenInPower = 0;
             }
-            return; // freeze schedule during frightened
+            return;
         }
         if (game.modeTimer === Infinity) return;
         game.modeTimer -= dt * 1000;
@@ -848,10 +834,7 @@
             const phase = MODE_SCHEDULE[game.modeIndex];
             game.modeTimer = phase.dur;
             game.ghostMode = phase.mode;
-            // Force ghosts to reverse direction on phase change
-            ghosts.forEach(g => {
-                if (g.state === 'out') g.dir = opposite(g.dir);
-            });
+            ghosts.forEach(g => { if (g.state === 'out') g.dir = opposite(g.dir); });
         }
     }
 
@@ -861,7 +844,6 @@
         const dt = Math.min(0.05, (now - lastTime) / 1000);
         lastTime = now;
 
-        // --- Update ---
         if (game.state === STATE.READY) {
             game.readyTimer -= dt * 1000;
             if (game.readyTimer <= 0) {
@@ -869,6 +851,8 @@
                 statusEl.textContent = 'GO!';
                 setTimeout(() => { if (statusEl) statusEl.textContent = '--'; }, 600);
             }
+            // Ghosts in house keep bobbing during READY
+            ghosts.forEach(g => { if (g.state === 'house') g.update(dt, pac, blinky); });
         } else if (game.state === STATE.PLAYING) {
             updateMode(dt);
             pac.update(dt);
@@ -878,21 +862,14 @@
         } else if (game.state === STATE.DYING) {
             pac.update(dt);
             game.dyingTimer -= dt * 1000;
-            if (game.dyingTimer <= 0) {
-                pac.dead = false;
-                loseLife();
-            }
+            if (game.dyingTimer <= 0) loseLife();
         }
 
-        // --- Draw ---
         ctx.clearRect(0, 0, W, H);
         drawMaze();
-        if (game.state !== STATE.DYING) {
-            ghosts.forEach(g => g.draw());
-        }
+        if (game.state !== STATE.DYING) ghosts.forEach(g => g.draw());
         pac.draw();
 
-        // READY text overlay on the maze
         if (game.state === STATE.READY) {
             ctx.fillStyle = '#ffcc00';
             ctx.font = 'bold 14px "Press Start 2P", monospace';
