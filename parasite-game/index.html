@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parasite - Tentacle Evolution</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  cursor: none;
+}
+canvas {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+}
+#ui-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+#hud {
+  position: absolute;
+  top: 10px; left: 10px;
+  color: #0f0;
+  font-size: 14px;
+  text-shadow: 0 0 5px #0f0;
+  line-height: 1.6;
+}
+#hud .bar-container {
+  width: 200px;
+  height: 12px;
+  background: rgba(0,50,0,0.5);
+  border: 1px solid #0f0;
+  border-radius: 6px;
+  margin: 2px 0 6px 0;
+  overflow: hidden;
+}
+#hud .bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s;
+}
+#hud .health-fill { background: linear-gradient(90deg, #f00, #ff0); }
+#hud .energy-fill { background: linear-gradient(90deg, #00f, #0ff); }
+#hud .xp-fill { background: linear-gradient(90deg, #0a0, #0f0); }
+#abilities {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+.ability-slot {
+  width: 60px; height: 60px;
+  border: 2px solid #0f0;
+  border-radius: 10px;
+  background: rgba(0,20,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #0f0;
+  font-size: 10px;
+  text-align: center;
+  position: relative;
+}
+.ability-slot .key {
+  position: absolute;
+  top: -8px; right: -8px;
+  background: #0a0;
+  color: #000;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 11px;
+}
+.ability-slot .cooldown-overlay {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 100%;
+  background: rgba(0,0,0,0.7);
+  border-radius: 0 0 8px 8px;
+  transition: height 0.1s;
+}
+#start-screen, #gameover-screen, #evolve-screen {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.9);
+  color: #0f0;
+  text-align: center;
+  pointer-events: all;
+  z-index: 100;
+}
+#start-screen h1 {
+  font-size: 60px;
+  text-shadow: 0 0 20px #0f0, 0 0 40px #0a0;
+  margin-bottom: 20px;
+  animation: pulse 2s infinite;
+}
+#start-screen p, #gameover-screen p {
+  font-size: 16px;
+  color: #0a0;
+  max-width: 500px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+.btn {
+  margin-top: 20px;
+  padding: 15px 40px;
+  font-size: 18px;
+  background: transparent;
+  border: 2px solid #0f0;
+  color: #0f0;
+  cursor: pointer;
+  pointer-events: all;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s;
+  border-radius: 5px;
+}
+.btn:hover {
+  background: #0f0;
+  color: #000;
+  box-shadow: 0 0 20px #0f0;
+}
+#gameover-screen h1 { font-size: 48px; color: #f00; text-shadow: 0 0 20px #f00; }
+#evolve-screen h2 { font-size: 36px; margin-bottom: 20px; text-shadow: 0 0 10px #0f0; }
+.evolve-options { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.evolve-card {
+  width: 180px; padding: 20px;
+  border: 2px solid #0f0;
+  border-radius: 10px;
+  background: rgba(0,30,0,0.8);
+  cursor: pointer;
+  pointer-events: all;
+  transition: all 0.3s;
+}
+.evolve-card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px #0f0;
+  background: rgba(0,60,0,0.9);
+}
+.evolve-card h3 { color: #0f0; margin-bottom: 8px; font-size: 14px; }
+.evolve-card p { color: #0a0; font-size: 11px; line-height: 1.4; }
+.hidden { display: none !important; }
+#minimap {
+  position: absolute;
+  bottom: 20px; right: 20px;
+  width: 150px; height: 150px;
+  border: 1px solid #0f0;
+  background: rgba(0,10,0,0.7);
+  border-radius: 5px;
+}
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+<div id="ui-overlay">
+  <div id="hud">
+    <div>SCORE: <span id="score">0</span></div>
+    <div>LEVEL: <span id="level">1</span></div>
+    <div>HEALTH:
+      <div class="bar-container"><div class="bar-fill health-fill" id="health-bar" style="width:100%"></div></div>
+    </div>
+    <div>ENERGY:
+      <div class="bar-container"><div class="bar-fill energy-fill" id="energy-bar" style="width:100%"></div></div>
+    </div>
+    <div>XP:
+      <div class="bar-container"><div class="bar-fill xp-fill" id="xp-bar" style="width:0%"></div></div>
+    </div>
+    <div>KILLS: <span id="kills">0</span></div>
+  </div>
+  <div id="abilities">
+    <div class="ability-slot"><span class="key">1</span><div class="cooldown-overlay" id="cd1"></div>GRAB</div>
+    <div class="ability-slot"><span class="key">2</span><div class="cooldown-overlay" id="cd2"></div>WHIP</div>
+    <div class="ability-slot"><span class="key">3</span><div class="cooldown-overlay" id="cd3"></div>POISON</div>
+    <div class="ability-slot"><span class="key">4</span><div class="cooldown-overlay" id="cd4"></div>DRAIN</div>
+    <div class="ability-slot"><span class="key">5</span><div class="cooldown-overlay" id="cd5"></div>SHIELD</div>
+  </div>
+  <canvas id="minimap"></canvas>
+</div>
+<div id="start-screen">
+  <h1>PARASITE</h1>
+  <p>You are a microscopic parasite organism. Use your tentacles to grab, consume, and evolve.</p>
+  <p>WASD to move | Mouse to aim | Click to extend tentacles</p>
+  <p>1-5 for special abilities | Consume cells to grow stronger</p>
+  <p>Beware of enemy parasites with their own tentacle abilities!</p>
+  <button class="btn" id="start-btn">BEGIN EVOLUTION</button>
+</div>
+<div id="gameover-screen" class="hidden">
+  <h1>ORGANISM DESTROYED</h1>
+  <p>Final Score: <span id="final-score">0</span></p>
+  <p>Level Reached: <span id="final-level">1</span></p>
+  <p>Cells Consumed: <span id="final-kills">0</span></p>
+  <button class="btn" id="restart-btn">EVOLVE AGAIN</button>
+</div>
+<div id="evolve-screen" class="hidden">
+  <h2>EVOLUTION AVAILABLE</h2>
+  <div class="evolve-options" id="evolve-options"></div>
+</div>
+<script>
+// ===== AUDIO ENGINE =====
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.initialized = false;
+  }
+  init() {
+    if (this.initialized) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.initialized = true;
+  }
+  playTone(freq, duration, type='sine', volume=0.1) {
+    if (!this.initialized) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, this.ctx.currentTime + duration);
+    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + duration);
+  }
+  playGrab() { this.playTone(200, 0.15, 'sawtooth', 0.08); }
+  playWhip() { this.playTone(800, 0.1, 'square', 0.06); this.playTone(400, 0.15, 'sawtooth', 0.04); }
+  playPoison() { this.playTone(100, 0.3, 'sine', 0.05); this.playTone(150, 0.2, 'sine', 0.04); }
+  playDrain() { this.playTone(300, 0.4, 'triangle', 0.06); }
+  playShield() { this.playTone(500, 0.2, 'sine', 0.07); this.playTone(700, 0.15, 'sine', 0.05); }
+  playHit() { this.playTone(80, 0.2, 'square', 0.1); }
+  playConsume() { this.playTone(400, 0.1, 'sine', 0.06); this.playTone(600, 0.1, 'sine', 0.05); }
+  playLevelUp() { this.playTone(400, 0.1, 'sine', 0.08); setTimeout(() => this.playTone(600, 0.1, 'sine', 0.08), 100); setTimeout(() => this.playTone(800, 0.2, 'sine', 0.08), 200); }
+  playDeath() { this.playTone(200, 0.3, 'sawtooth', 0.1); this.playTone(100, 0.5, 'square', 0.08); }
+}
+const audio = new AudioEngine();
+
+// ===== GAME STATE =====
+const WORLD_W = 4000, WORLD_H = 4000;
+let canvas, ctx, miniCanvas, miniCtx;
+let gameState = 'menu'; // menu, playing, paused, gameover, evolving
+let camera = { x: 0, y: 0 };
+let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false };
+let keys = {};
+let particles = [];
+let cells = [];
+let enemies = [];
+let projectiles = [];
+let player = null;
+let score = 0, kills = 0, gameTime = 0;
+let frameCount = 0;
+let difficultyTimer = 0;
+let spawnTimer = 0;
+
+// ===== UTILITIES =====
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function angle(a, b) { return Math.atan2(b.y - a.y, b.x - a.x); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function hsl(h, s, l) { return `hsl(${h},${s}%,${l}%)`; }
+
+// ===== TENTACLE CLASS =====
+class Tentacle {
+  constructor(owner, index, total, length, thickness, color) {
+    this.owner = owner;
+    this.index = index;
+    this.segments = [];
+    this.length = length;
+    this.segCount = Math.floor(length / 8);
+    this.thickness = thickness;
+    this.color = color;
+    this.targetAngle = (index / total) * Math.PI * 2;
+    this.currentAngle = this.targetAngle;
+    this.grabTarget = null;
+    this.extending = false;
+    this.extendProgress = 0;
+    this.retracting = false;
+    this.whipping = false;
+    this.whipTime = 0;
+    this.poisonActive = false;
+    this.draining = false;
+    this.waveOffset = Math.random() * Math.PI * 2;
+    this.initSegments();
+  }
+  initSegments() {
+    this.segments = [];
+    for (let i = 0; i <= this.segCount; i++) {
+      this.segments.push({ x: this.owner.x, y: this.owner.y, vx: 0, vy: 0 });
+    }
+  }
+  update(dt, targetX, targetY) {
+    const baseAngle = this.targetAngle + Math.sin(gameTime * 2 + this.waveOffset) * 0.3;
+    let tx, ty;
+    if (this.grabTarget) {
+      tx = this.grabTarget.x;
+      ty = this.grabTarget.y;
+    } else if (this.extending) {
+      this.extendProgress = Math.min(1, this.extendProgress + dt * 4);
+      tx = this.owner.x + Math.cos(this.currentAngle) * this.length * this.extendProgress;
+      ty = this.owner.y + Math.sin(this.currentAngle) * this.length * this.extendProgress;
+      if (this.extendProgress >= 1) { this.extending = false; this.retracting = true; }
+    } else if (this.retracting) {
+      this.extendProgress = Math.max(0, this.extendProgress - dt * 3);
+      tx = this.owner.x + Math.cos(this.currentAngle) * this.length * this.extendProgress;
+      ty = this.owner.y + Math.sin(this.currentAngle) * this.length * this.extendProgress;
+      if (this.extendProgress <= 0) this.retracting = false;
+    } else if (this.whipping) {
+      this.whipTime += dt * 15;
+      const whipAngle = this.currentAngle + Math.sin(this.whipTime) * 1.5;
+      tx = this.owner.x + Math.cos(whipAngle) * this.length * 0.9;
+      ty = this.owner.y + Math.sin(whipAngle) * this.length * 0.9;
+      if (this.whipTime > Math.PI * 4) { this.whipping = false; this.whipTime = 0; }
+    } else {
+      const restLen = this.length * 0.4;
+      tx = this.owner.x + Math.cos(baseAngle) * restLen;
+      ty = this.owner.y + Math.sin(baseAngle) * restLen;
+    }
+    // Verlet-like chain physics
+    this.segments[0].x = this.owner.x;
+    this.segments[0].y = this.owner.y;
+    for (let i = 1; i < this.segments.length; i++) {
+      const seg = this.segments[i];
+      const prev = this.segments[i - 1];
+      const t = i / (this.segments.length - 1);
+      const idealX = lerp(this.owner.x, tx, t);
+      const idealY = lerp(this.owner.y, ty, t);
+      const wave = Math.sin(gameTime * 3 + i * 0.5 + this.waveOffset) * (5 + t * 8);
+      const perpAngle = Math.atan2(ty - this.owner.y, tx - this.owner.x) + Math.PI / 2;
+      seg.vx += (idealX + Math.cos(perpAngle) * wave - seg.x) * 8 * dt;
+      seg.vy += (idealY + Math.sin(perpAngle) * wave - seg.y) * 8 * dt;
+      seg.vx *= 0.85;
+      seg.vy *= 0.85;
+      seg.x += seg.vx;
+      seg.y += seg.vy;
+      // Constrain distance
+      const d = dist(seg, prev);
+      const maxD = this.length / this.segCount * 1.5;
+      if (d > maxD) {
+        const a = Math.atan2(seg.y - prev.y, seg.x - prev.x);
+        seg.x = prev.x + Math.cos(a) * maxD;
+        seg.y = prev.y + Math.sin(a) * maxD;
+      }
+    }
+  }
+  draw(ctx) {
+    if (this.segments.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(this.segments[0].x - camera.x, this.segments[0].y - camera.y);
+    for (let i = 1; i < this.segments.length; i++) {
+      const s = this.segments[i];
+      ctx.lineTo(s.x - camera.x, s.y - camera.y);
+    }
+    const grad = ctx.createLinearGradient(
+      this.segments[0].x - camera.x, this.segments[0].y - camera.y,
+      this.segments[this.segments.length-1].x - camera.x, this.segments[this.segments.length-1].y - camera.y
+    );
+    let baseColor = this.color;
+    if (this.poisonActive) baseColor = '#0f0';
+    if (this.draining) baseColor = '#f0f';
+    grad.addColorStop(0, baseColor);
+    grad.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = this.thickness;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Draw suckers/nodes
+    for (let i = 2; i < this.segments.length; i += 3) {
+      const s = this.segments[i];
+      const t = i / this.segments.length;
+      ctx.beginPath();
+      ctx.arc(s.x - camera.x, s.y - camera.y, this.thickness * 0.6 * (1 - t * 0.5), 0, Math.PI * 2);
+      ctx.fillStyle = this.poisonActive ? 'rgba(0,255,0,0.5)' : 'rgba(150,0,150,0.4)';
+      ctx.fill();
+    }
+    // Tip
+    const tip = this.segments[this.segments.length - 1];
+    ctx.beginPath();
+    ctx.arc(tip.x - camera.x, tip.y - camera.y, this.thickness * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = this.poisonActive ? '#0f0' : (this.draining ? '#f0f' : baseColor);
+    ctx.fill();
+    // Poison particles
+    if (this.poisonActive) {
+      for (let i = 0; i < this.segments.length; i += 2) {
+        if (Math.random() < 0.3) {
+          spawnParticle(this.segments[i].x, this.segments[i].y, '#0f0', 3, 0.5);
+        }
+      }
+    }
+  }
+  getTip() { return this.segments[this.segments.length - 1]; }
+  extend(angle) {
+    this.currentAngle = angle;
+    this.extending = true;
+    this.extendProgress = 0;
+  }
+}
+
+// ===== PLAYER CLASS =====
+class Player {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;
+    this.radius = 25;
+    this.speed = 150;
+    this.maxHealth = 100;
+    this.health = 100;
+    this.maxEnergy = 100;
+    this.energy = 100;
+    this.energyRegen = 8;
+    this.xp = 0;
+    this.xpToLevel = 50;
+    this.level = 1;
+    this.tentacles = [];
+    this.tentacleCount = 6;
+    this.tentacleLength = 120;
+    this.tentacleThickness = 4;
+    this.damage = 10;
+    this.grabStrength = 1;
+    this.poisonDamage = 3;
+    this.drainAmount = 2;
+    this.shieldActive = false;
+    this.shieldTimer = 0;
+    this.cooldowns = { grab: 0, whip: 0, poison: 0, drain: 0, shield: 0 };
+    this.maxCooldowns = { grab: 1, whip: 2, poison: 3, drain: 4, shield: 8 };
+    this.invulnerable = 0;
+    this.pulsePhase = 0;
+    this.createTentacles();
+  }
+  createTentacles() {
+    this.tentacles = [];
+    for (let i = 0; i < this.tentacleCount; i++) {
+      this.tentacles.push(new Tentacle(this, i, this.tentacleCount, this.tentacleLength, this.tentacleThickness, '#8b00c8'));
+    }
+  }
+  update(dt) {
+    // Movement
+    let mx = 0, my = 0;
+    if (keys['w'] || keys['arrowup']) my -= 1;
+    if (keys['s'] || keys['arrowdown']) my += 1;
+    if (keys['a'] || keys['arrowleft']) mx -= 1;
+    if (keys['d'] || keys['arrowright']) mx += 1;
+    if (mx !== 0 || my !== 0) {
+      const mag = Math.hypot(mx, my);
+      mx /= mag; my /= mag;
+    }
+    this.vx = lerp(this.vx, mx * this.speed, 5 * dt);
+    this.vy = lerp(this.vy, my * this.speed, 5 * dt);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.x = clamp(this.x, this.radius, WORLD_W - this.radius);
+    this.y = clamp(this.y, this.radius, WORLD_H - this.radius);
+    // Energy regen
+    this.energy = Math.min(this.maxEnergy, this.energy + this.energyRegen * dt);
+    // Cooldowns
+    for (let k in this.cooldowns) { this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt); }
+    // Shield
+    if (this.shieldActive) {
+      this.shieldTimer -= dt;
+      if (this.shieldTimer <= 0) this.shieldActive = false;
+    }
+    // Invulnerability
+    if (this.invulnerable > 0) this.invulnerable -= dt;
+    // Update tentacles
+    this.tentacles.forEach(t => t.update(dt, mouse.worldX, mouse.worldY));
+    this.pulsePhase += dt * 3;
+    // Check tentacle collisions with cells
+    this.tentacles.forEach(t => {
+      const tip = t.getTip();
+      if (t.grabTarget) {
+        const target = t.grabTarget;
+        if (target.dead || dist(tip, this) < this.radius * 1.5) {
+          if (!target.dead) {
+            this.consumeCell(target);
+          }
+          t.grabTarget = null;
+        } else {
+          // Pull target towards us
+          const a = angle(target, this);
+          target.x += Math.cos(a) * 200 * dt * this.grabStrength;
+          target.y += Math.sin(a) * 200 * dt * this.grabStrength;
+        }
+        return;
+      }
+      if (t.extending || t.whipping) {
+        cells.forEach(c => {
+          if (c.dead) return;
+          if (dist(tip, c) < c.radius + 10) {
+            if (t.extending) {
+              t.grabTarget = c;
+              t.extending = false;
+              audio.playGrab();
+            } else if (t.whipping) {
+              this.consumeCell(c);
+            }
+          }
+        });
+        enemies.forEach(e => {
+          if (e.dead) return;
+          if (dist(tip, e) < e.radius + 10) {
+            let dmg = this.damage;
+            if (t.whipping) dmg *= 2;
+            if (t.poisonActive) { e.poisoned = true; e.poisonTimer = 3; }
+            if (t.draining) {
+              this.health = Math.min(this.maxHealth, this.health + this.drainAmount);
+              spawnParticle(e.x, e.y, '#f0f', 5, 0.8);
+            }
+            e.takeDamage(dmg);
+            spawnParticle(tip.x, tip.y, '#ff0', 8, 0.5);
+          }
+        });
+      }
+    });
+  }
+  consumeCell(c) {
+    c.dead = true;
+    this.xp += c.xpValue || 5;
+    score += c.scoreValue || 10;
+    this.health = Math.min(this.maxHealth, this.health + 2);
+    audio.playConsume();
+    for (let i = 0; i < 8; i++) {
+      spawnParticle(c.x, c.y, c.color, rand(3, 6), rand(0.3, 0.7));
+    }
+    // Level up check
+    if (this.xp >= this.xpToLevel) {
+      this.levelUp();
+    }
+  }
+  levelUp() {
+    this.level++;
+    this.xp -= this.xpToLevel;
+    this.xpToLevel = Math.floor(this.xpToLevel * 1.5);
+    audio.playLevelUp();
+    showEvolveScreen();
+    for (let i = 0; i < 30; i++) {
+      spawnParticle(this.x, this.y, hsl(rand(100, 150), 100, 50), rand(4, 10), rand(0.5, 1.2));
+    }
+  }
+  takeDamage(amount) {
+    if (this.invulnerable > 0) return;
+    if (this.shieldActive) { amount *= 0.2; }
+    this.health -= amount;
+    this.invulnerable = 0.3;
+    audio.playHit();
+    for (let i = 0; i < 5; i++) {
+      spawnParticle(this.x, this.y, '#f00', rand(3, 6), rand(0.3, 0.6));
+    }
+    if (this.health <= 0) {
+      gameOver();
+    }
+  }
+  useAbility(index) {
+    const abilities = ['grab', 'whip', 'poison', 'drain', 'shield'];
+    const ab = abilities[index];
+    if (this.cooldowns[ab] > 0) return;
+    const energyCosts = { grab: 5, whip: 15, poison: 20, drain: 25, shield: 30 };
+    if (this.energy < energyCosts[ab]) return;
+    this.energy -= energyCosts[ab];
+    this.cooldowns[ab] = this.maxCooldowns[ab];
+    const aimAngle = Math.atan2(mouse.worldY - this.y, mouse.worldX - this.x);
+    switch(ab) {
+      case 'grab':
+        audio.playGrab();
+        this.tentacles.forEach(t => {
+          const tAngle = aimAngle + rand(-0.3, 0.3);
+          t.extend(tAngle);
+        });
+        break;
+      case 'whip':
+        audio.playWhip();
+        this.tentacles.forEach(t => {
+          t.currentAngle = aimAngle + rand(-0.5, 0.5);
+          t.whipping = true;
+          t.whipTime = 0;
+        });
+        break;
+      case 'poison':
+        audio.playPoison();
+        this.tentacles.forEach(t => { t.poisonActive = true; });
+        setTimeout(() => { this.tentacles.forEach(t => { t.poisonActive = false; }); }, 3000);
+        break;
+      case 'drain':
+        audio.playDrain();
+        this.tentacles.forEach(t => {
+          t.draining = true;
+          t.extend(aimAngle + rand(-0.4, 0.4));
+        });
+        setTimeout(() => { this.tentacles.forEach(t => { t.draining = false; }); }, 2000);
+        break;
+      case 'shield':
+        audio.playShield();
+        this.shieldActive = true;
+        this.shieldTimer = 4;
+        break;
+    }
+  }
+  draw(ctx) {
+    const sx = this.x - camera.x, sy = this.y - camera.y;
+    // Glow
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, this.radius * 2.5);
+    glow.addColorStop(0, 'rgba(139,0,200,0.2)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Tentacles
+    this.tentacles.forEach(t => t.draw(ctx));
+    // Body
+    const pulse = 1 + Math.sin(this.pulsePhase) * 0.05;
+    const bodyGrad = ctx.createRadialGradient(sx - 5, sy - 5, 0, sx, sy, this.radius * pulse);
+    bodyGrad.addColorStop(0, '#d070ff');
+    bodyGrad.addColorStop(0.5, '#8b00c8');
+    bodyGrad.addColorStop(1, '#3a0055');
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
+    // Nucleus
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,200,255,0.6)';
+    ctx.fill();
+    // Eye-like structure
+    const eyeAngle = Math.atan2(mouse.worldY - this.y, mouse.worldX - this.x);
+    const eyeX = sx + Math.cos(eyeAngle) * this.radius * 0.2;
+    const eyeY = sy + Math.sin(eyeAngle) * this.radius * 0.2;
+    ctx.beginPath();
+    ctx.arc(eyeX, eyeY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(eyeX + Math.cos(eyeAngle) * 2, eyeY + Math.sin(eyeAngle) * 2, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+    // Shield visual
+    if (this.shieldActive) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.radius * 1.8, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,255,255,${0.3 + Math.sin(gameTime * 8) * 0.2})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.radius * 1.6, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,200,255,${0.2 + Math.sin(gameTime * 6) * 0.1})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    // Invulnerability flash
+    if (this.invulnerable > 0 && Math.sin(this.invulnerable * 30) > 0) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.radius * 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fill();
+    }
+  }
+}
+
+// ===== ENEMY PARASITE =====
+class Enemy {
+  constructor(x, y, type) {
+    this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;
+    this.type = type; // 'grabber', 'whipper', 'poisoner', 'drainer'
+    this.dead = false;
+    this.poisoned = false;
+    this.poisonTimer = 0;
+    this.attackTimer = rand(1, 3);
+    this.moveAngle = rand(0, Math.PI * 2);
+    this.moveTimer = 0;
+    this.target = null;
+    this.aggroRange = 300;
+    this.deaggroRange = 500;
+    const configs = {
+      grabber: { radius: 20, health: 40, speed: 80, color: '#c83200', tentCount: 4, tentLen: 80, damage: 5 },
+      whipper: { radius: 18, health: 30, speed: 100, color: '#c8c800', tentCount: 6, tentLen: 100, damage: 8 },
+      poisoner: { radius: 22, health: 50, speed: 60, color: '#00c832', tentCount: 5, tentLen: 90, damage: 4 },
+      drainer: { radius: 24, health: 60, speed: 50, color: '#c800c8', tentCount: 8, tentLen: 110, damage: 3 }
+    };
+    const cfg = configs[type] || configs.grabber;
+    this.radius = cfg.radius;
+    this.maxHealth = cfg.health;
+    this.health = cfg.health;
+    this.speed = cfg.speed;
+    this.color = cfg.color;
+    this.damage = cfg.damage;
+    this.tentacles = [];
+    for (let i = 0; i < cfg.tentCount; i++) {
+      this.tentacles.push(new Tentacle(this, i, cfg.tentCount, cfg.tentLen, 3, cfg.color));
+    }
+  }
+  update(dt) {
+    if (this.dead) return;
+    // Poison damage
+    if (this.poisoned) {
+      this.poisonTimer -= dt;
+      this.health -= player.poisonDamage * dt;
+      if (Math.random() < 0.2) spawnParticle(this.x + rand(-10, 10), this.y + rand(-10, 10), '#0f0', 3, 0.4);
+      if (this.poisonTimer <= 0) this.poisoned = false;
+    }
+    // AI behavior
+    const distToPlayer = dist(this, player);
+    if (distToPlayer < this.aggroRange) {
+      this.target = player;
+    } else if (distToPlayer > this.deaggroRange) {
+      this.target = null;
+    }
+    if (this.target) {
+      // Move towards player
+      const a = angle(this, player);
+      this.vx = lerp(this.vx, Math.cos(a) * this.speed, 3 * dt);
+      this.vy = lerp(this.vy, Math.sin(a) * this.speed, 3 * dt);
+      // Attack
+      this.attackTimer -= dt;
+      if (this.attackTimer <= 0) {
+        this.attackTimer = rand(1.5, 3.5);
+        this.performAttack();
+      }
+    } else {
+      // Wander
+      this.moveTimer -= dt;
+      if (this.moveTimer <= 0) {
+        this.moveAngle = rand(0, Math.PI * 2);
+        this.moveTimer = rand(2, 5);
+      }
+      this.vx = lerp(this.vx, Math.cos(this.moveAngle) * this.speed * 0.4, 2 * dt);
+      this.vy = lerp(this.vy, Math.sin(this.moveAngle) * this.speed * 0.4, 2 * dt);
+    }
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.x = clamp(this.x, this.radius, WORLD_W - this.radius);
+    this.y = clamp(this.y, this.radius, WORLD_H - this.radius);
+    // Update tentacles
+    this.tentacles.forEach(t => t.update(dt, player.x, player.y));
+    // Contact damage
+    if (distToPlayer < this.radius + player.radius) {
+      player.takeDamage(this.damage * dt * 3);
+    }
+    // Death check
+    if (this.health <= 0) {
+      this.die();
+    }
+  }
+  performAttack() {
+    const a = angle(this, player);
+    switch(this.type) {
+      case 'grabber':
+        this.tentacles.forEach(t => t.extend(a + rand(-0.3, 0.3)));
+        break;
+      case 'whipper':
+        this.tentacles.forEach(t => { t.currentAngle = a + rand(-0.5, 0.5); t.whipping = true; t.whipTime = 0; });
+        break;
+      case 'poisoner':
+        this.tentacles.forEach(t => { t.poisonActive = true; t.extend(a + rand(-0.4, 0.4)); });
+        setTimeout(() => this.tentacles.forEach(t => { t.poisonActive = false; }), 2000);
+        break;
+      case 'drainer':
+        this.tentacles.forEach(t => { t.draining = true; t.extend(a + rand(-0.3, 0.3)); });
+        setTimeout(() => this.tentacles.forEach(t => { t.draining = false; }), 1500);
+        break;
+    }
+    // Check if attack hits player
+    setTimeout(() => {
+      if (this.dead) return;
+      this.tentacles.forEach(t => {
+        const tip = t.getTip();
+        if (dist(tip, player) < player.radius + 15) {
+          let dmg = this.damage;
+          if (this.type === 'poisoner') {
+            player.takeDamage(dmg * 0.5);
+            // Could add poison to player in future
+          } else {
+            player.takeDamage(dmg);
+          }
+        }
+      });
+    }, 300);
+  }
+  takeDamage(amount) {
+    this.health -= amount;
+    for (let i = 0; i < 3; i++) {
+      spawnParticle(this.x + rand(-10, 10), this.y + rand(-10, 10), this.color, rand(2, 5), rand(0.2, 0.5));
+    }
+  }
+  die() {
+    this.dead = true;
+    kills++;
+    score += 50 + this.maxHealth;
+    player.xp += 10 + Math.floor(this.maxHealth / 5);
+    if (player.xp >= player.xpToLevel) player.levelUp();
+    for (let i = 0; i < 20; i++) {
+      spawnParticle(this.x, this.y, this.color, rand(3, 8), rand(0.5, 1.2));
+    }
+    // Drop cells
+    for (let i = 0; i < 3; i++) {
+      cells.push(createCell(this.x + rand(-30, 30), this.y + rand(-30, 30), 'nutrient'));
+    }
+  }
+  draw(ctx) {
+    if (this.dead) return;
+    const sx = this.x - camera.x, sy = this.y - camera.y;
+    // Off-screen check
+    if (sx < -100 || sx > canvas.width + 100 || sy < -100 || sy > canvas.height + 100) return;
+    // Glow
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, this.radius * 2);
+    glow.addColorStop(0, this.color + '33');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius * 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Tentacles
+    this.tentacles.forEach(t => t.draw(ctx));
+    // Body
+    const bodyGrad = ctx.createRadialGradient(sx - 3, sy - 3, 0, sx, sy, this.radius);
+    bodyGrad.addColorStop(0, this.color);
+    bodyGrad.addColorStop(1, '#1a0a0a');
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
+    // Health bar
+    if (this.health < this.maxHealth) {
+      const barW = this.radius * 2;
+      const barH = 4;
+      const barX = sx - barW / 2;
+      const barY = sy - this.radius - 12;
+      ctx.fillStyle = '#300';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(barX, barY, barW * (this.health / this.maxHealth), barH);
+    }
+    // Type indicator
+    ctx.fillStyle = '#fff';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.type[0].toUpperCase(), sx, sy + 3);
+  }
+}
+
+// ===== CELL CLASS =====
+function createCell(x, y, type) {
+  const types = {
+    nutrient: { radius: 8, color: '#0f0', xp: 5, score: 10, speed: 20 },
+    protein: { radius: 12, color: '#ff0', xp: 10, score: 20, speed: 15 },
+    energy: { radius: 6, color: '#0ff', xp: 3, score: 5, speed: 30 },
+    blood: { radius: 10, color: '#f00', xp: 8, score: 15, speed: 25 },
+    rare: { radius: 15, color: '#f0f', xp: 25, score: 50, speed: 10 }
+  };
+  const cfg = types[type] || types.nutrient;
+  return {
+    x, y,
+    vx: rand(-cfg.speed, cfg.speed),
+    vy: rand(-cfg.speed, cfg.speed),
+    radius: cfg.radius + rand(-2, 2),
+    color: cfg.color,
+    type: type,
+    xpValue: cfg.xp,
+    scoreValue: cfg.score,
+    speed: cfg.speed,
+    dead: false,
+    phase: rand(0, Math.PI * 2),
+    moveTimer: rand(1, 4)
+  };
+}
+
+function updateCell(c, dt) {
+  if (c.dead) return;
+  c.phase += dt * 2;
+  c.moveTimer -= dt;
+  if (c.moveTimer <= 0) {
+    c.vx = rand(-c.speed, c.speed);
+    c.vy = rand(-c.speed, c.speed);
+    c.moveTimer = rand(2, 5);
+  }
+  // Flee from player if close
+  const d = dist(c, player);
+  if (d < 100) {
+    const a = angle(player, c);
+    c.vx += Math.cos(a) * 50 * dt;
+    c.vy += Math.sin(a) * 50 * dt;
+  }
+  c.x += c.vx * dt;
+  c.y += c.vy * dt;
+  c.x = clamp(c.x, c.radius, WORLD_W - c.radius);
+  c.y = clamp(c.y, c.radius, WORLD_H - c.radius);
+  // Player collision (direct contact consumes)
+  if (d < player.radius + c.radius) {
+    player.consumeCell(c);
+  }
+}
+
+function drawCell(c, ctx) {
+  if (c.dead) return;
+  const sx = c.x - camera.x, sy = c.y - camera.y;
+  if (sx < -50 || sx > canvas.width + 50 || sy < -50 || sy > canvas.height + 50) return;
+  const pulse = 1 + Math.sin(c.phase) * 0.15;
+  // Glow
+  ctx.beginPath();
+  ctx.arc(sx, sy, c.radius * pulse * 2, 0, Math.PI * 2);
+  ctx.fillStyle = c.color + '22';
+  ctx.fill();
+  // Membrane
+  ctx.beginPath();
+  for (let a = 0; a < Math.PI * 2; a += 0.2) {
+    const r = c.radius * pulse + Math.sin(a * 3 + c.phase) * 2;
+    const px = sx + Math.cos(a) * r;
+    const py = sy + Math.sin(a) * r;
+    if (a === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = c.color + '88';
+  ctx.fill();
+  ctx.strokeStyle = c.color;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Inner organelle
+  ctx.beginPath();
+  ctx.arc(sx + Math.sin(c.phase) * 2, sy + Math.cos(c.phase) * 2, c.radius * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = c.color + 'cc';
+  ctx.fill();
+}
+
+// ===== PARTICLES =====
+function spawnParticle(x, y, color, size, life) {
+  particles.push({
+    x, y,
+    vx: rand(-100, 100),
+    vy: rand(-100, 100),
+    color,
+    size,
+    life,
+    maxLife: life
+  });
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.95;
+    p.vy *= 0.95;
+    p.life -= dt;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function drawParticles(ctx) {
+  particles.forEach(p => {
+    const sx = p.x - camera.x, sy = p.y - camera.y;
+    if (sx < -20 || sx > canvas.width + 20 || sy < -20 || sy > canvas.height + 20) return;
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size * alpha, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ===== BACKGROUND =====
+function drawBackground(ctx) {
+  // Dark gradient background
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Grid lines (biological membrane pattern)
+  ctx.strokeStyle = 'rgba(0,50,0,0.15)';
+  ctx.lineWidth = 1;
+  const gridSize = 80;
+  const offX = -camera.x % gridSize;
+  const offY = -camera.y % gridSize;
+  for (let x = offX; x < canvas.width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = offY; y < canvas.height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+  // Floating ambient particles (background organisms)
+  for (let i = 0; i < 30; i++) {
+    const bx = ((i * 137.5 + gameTime * 5) % (WORLD_W + 200)) - camera.x;
+    const by = ((i * 251.3 + gameTime * 3) % (WORLD_H + 200)) - camera.y;
+    if (bx < -10 || bx > canvas.width + 10 || by < -10 || by > canvas.height + 10) continue;
+    ctx.beginPath();
+    ctx.arc(bx, by, 2 + Math.sin(gameTime + i) * 1, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,100,0,${0.2 + Math.sin(gameTime * 2 + i) * 0.1})`;
+    ctx.fill();
+  }
+  // World boundary indicator
+  const bounds = [
+    { x1: 0, y1: 0, x2: WORLD_W, y2: 0 },
+    { x1: WORLD_W, y1: 0, x2: WORLD_W, y2: WORLD_H },
+    { x1: 0, y1: WORLD_H, x2: WORLD_W, y2: WORLD_H },
+    { x1: 0, y1: 0, x2: 0, y2: WORLD_H }
+  ];
+  ctx.strokeStyle = 'rgba(255,0,0,0.4)';
+  ctx.lineWidth = 3;
+  bounds.forEach(b => {
+    const sx1 = b.x1 - camera.x, sy1 = b.y1 - camera.y;
+    const sx2 = b.x2 - camera.x, sy2 = b.y2 - camera.y;
+    ctx.beginPath();
+    ctx.moveTo(sx1, sy1);
+    ctx.lineTo(sx2, sy2);
+    ctx.stroke();
+  });
+}
+
+// ===== MINIMAP =====
+function drawMinimap() {
+  const mw = 150, mh = 150;
+  miniCtx.fillStyle = 'rgba(0,10,0,0.8)';
+  miniCtx.fillRect(0, 0, mw, mh);
+  // Scale
+  const sx = mw / WORLD_W, sy = mh / WORLD_H;
+  // Cells as dots
+  cells.forEach(c => {
+    if (c.dead) return;
+    miniCtx.fillStyle = c.color + '88';
+    miniCtx.fillRect(c.x * sx, c.y * sy, 2, 2);
+  });
+  // Enemies
+  enemies.forEach(e => {
+    if (e.dead) return;
+    miniCtx.fillStyle = e.color;
+    miniCtx.fillRect(e.x * sx - 1, e.y * sy - 1, 3, 3);
+  });
+  // Player
+  miniCtx.fillStyle = '#f0f';
+  miniCtx.fillRect(player.x * sx - 2, player.y * sy - 2, 5, 5);
+  // Viewport
+  miniCtx.strokeStyle = 'rgba(0,255,0,0.5)';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(camera.x * sx, camera.y * sy, canvas.width * sx, canvas.height * sy);
+  // Border
+  miniCtx.strokeStyle = '#0f0';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(0, 0, mw, mh);
+}
+
+// ===== EVOLUTION SYSTEM =====
+const evolutions = [
+  { name: 'Extra Tentacle', desc: 'Grow an additional tentacle', apply: () => { player.tentacleCount++; player.createTentacles(); }},
+  { name: 'Longer Reach', desc: 'Tentacles grow 25% longer', apply: () => { player.tentacleLength *= 1.25; player.createTentacles(); }},
+  { name: 'Thicker Grip', desc: 'Tentacles become thicker and deal more damage', apply: () => { player.tentacleThickness += 1; player.damage += 3; player.createTentacles(); }},
+  { name: 'Rapid Regen', desc: 'Energy regenerates 40% faster', apply: () => { player.energyRegen *= 1.4; }},
+  { name: 'Tough Membrane', desc: 'Increase max health by 30', apply: () => { player.maxHealth += 30; player.health += 30; }},
+  { name: 'Swift Movement', desc: 'Move 20% faster', apply: () => { player.speed *= 1.2; }},
+  { name: 'Stronger Poison', desc: 'Poison deals 50% more damage', apply: () => { player.poisonDamage *= 1.5; }},
+  { name: 'Life Drain+', desc: 'Drain heals 50% more', apply: () => { player.drainAmount *= 1.5; }},
+  { name: 'Grab Power', desc: 'Grab pulls targets faster', apply: () => { player.grabStrength *= 1.4; }},
+  { name: 'Energy Surge', desc: 'Max energy +30', apply: () => { player.maxEnergy += 30; player.energy += 30; }},
+  { name: 'Body Growth', desc: 'Grow larger, more contact damage', apply: () => { player.radius += 3; player.damage += 2; }},
+  { name: 'Cooldown Redux', desc: 'All cooldowns reduced by 20%', apply: () => { for(let k in player.maxCooldowns) player.maxCooldowns[k] *= 0.8; }},
+];
+
+function showEvolveScreen() {
+  gameState = 'evolving';
+  const container = document.getElementById('evolve-options');
+  container.innerHTML = '';
+  // Pick 3 random evolutions
+  const choices = [];
+  const available = [...evolutions];
+  for (let i = 0; i < 3 && available.length > 0; i++) {
+    const idx = randInt(0, available.length - 1);
+    choices.push(available.splice(idx, 1)[0]);
+  }
+  choices.forEach(evo => {
+    const card = document.createElement('div');
+    card.className = 'evolve-card';
+    card.innerHTML = `<h3>${evo.name}</h3><p>${evo.desc}</p>`;
+    card.addEventListener('click', () => {
+      evo.apply();
+      document.getElementById('evolve-screen').classList.add('hidden');
+      gameState = 'playing';
+    });
+    container.appendChild(card);
+  });
+  document.getElementById('evolve-screen').classList.remove('hidden');
+}
+
+// ===== SPAWNING =====
+function spawnCells(count) {
+  const types = ['nutrient', 'nutrient', 'nutrient', 'protein', 'energy', 'blood', 'rare'];
+  for (let i = 0; i < count; i++) {
+    const type = types[randInt(0, types.length - 1)];
+    cells.push(createCell(rand(50, WORLD_W - 50), rand(50, WORLD_H - 50), type));
+  }
+}
+
+function spawnEnemy() {
+  const types = ['grabber', 'whipper', 'poisoner', 'drainer'];
+  const type = types[randInt(0, types.length - 1)];
+  // Spawn away from player
+  let x, y;
+  do {
+    x = rand(100, WORLD_W - 100);
+    y = rand(100, WORLD_H - 100);
+  } while (dist({x, y}, player) < 500);
+  const e = new Enemy(x, y, type);
+  // Scale with level
+  const scaling = 1 + (player.level - 1) * 0.15;
+  e.maxHealth *= scaling;
+  e.health = e.maxHealth;
+  e.damage *= scaling;
+  e.speed *= (1 + (player.level - 1) * 0.05);
+  enemies.push(e);
+}
+
+// ===== GAME FUNCTIONS =====
+function gameOver() {
+  gameState = 'gameover';
+  audio.playDeath();
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('final-level').textContent = player.level;
+  document.getElementById('final-kills').textContent = kills;
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+function startGame() {
+  audio.init();
+  gameState = 'playing';
+  score = 0; kills = 0; gameTime = 0; frameCount = 0;
+  difficultyTimer = 0; spawnTimer = 0;
+  particles = []; cells = []; enemies = [];
+  player = new Player(WORLD_W / 2, WORLD_H / 2);
+  spawnCells(80);
+  for (let i = 0; i < 5; i++) spawnEnemy();
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.add('hidden');
+  document.getElementById('evolve-screen').classList.add('hidden');
+}
+
+function updateHUD() {
+  document.getElementById('score').textContent = score;
+  document.getElementById('level').textContent = player.level;
+  document.getElementById('kills').textContent = kills;
+  document.getElementById('health-bar').style.width = (player.health / player.maxHealth * 100) + '%';
+  document.getElementById('energy-bar').style.width = (player.energy / player.maxEnergy * 100) + '%';
+  document.getElementById('xp-bar').style.width = (player.xp / player.xpToLevel * 100) + '%';
+  // Cooldown overlays
+  const abs = ['grab', 'whip', 'poison', 'drain', 'shield'];
+  abs.forEach((a, i) => {
+    const cd = player.cooldowns[a] / player.maxCooldowns[a];
+    document.getElementById('cd' + (i + 1)).style.height = (cd * 100) + '%';
+  });
+}
+
+// ===== MAIN LOOP =====
+let lastTime = 0;
+function gameLoop(timestamp) {
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+  if (gameState !== 'playing') return;
+  frameCount++;
+  gameTime += dt;
+  // Update player
+  player.update(dt);
+  // Camera follows player
+  camera.x = lerp(camera.x, player.x - canvas.width / 2, 5 * dt);
+  camera.y = lerp(camera.y, player.y - canvas.height / 2, 5 * dt);
+  camera.x = clamp(camera.x, 0, WORLD_W - canvas.width);
+  camera.y = clamp(camera.y, 0, WORLD_H - canvas.height);
+  // Update mouse world position
+  mouse.worldX = mouse.x + camera.x;
+  mouse.worldY = mouse.y + camera.y;
+  // Update cells
+  cells.forEach(c => updateCell(c, dt));
+  cells = cells.filter(c => !c.dead);
+  // Update enemies
+  enemies.forEach(e => e.update(dt));
+  enemies = enemies.filter(e => !e.dead);
+  // Update particles
+  updateParticles(dt);
+  // Spawning
+  spawnTimer += dt;
+  if (spawnTimer > 3) {
+    spawnTimer = 0;
+    if (cells.length < 60) spawnCells(5);
+  }
+  difficultyTimer += dt;
+  if (difficultyTimer > 10) {
+    difficultyTimer = 0;
+    if (enemies.length < 3 + player.level * 2) {
+      spawnEnemy();
+    }
+  }
+  // Auto-extend tentacle on mouse down
+  if (mouse.down && frameCount % 10 === 0) {
+    const a = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const tentIdx = frameCount % player.tentacles.length;
+    const t = player.tentacles[tentIdx];
+    if (!t.extending && !t.retracting && !t.whipping && !t.grabTarget) {
+      t.extend(a + rand(-0.2, 0.2));
+    }
+  }
+  // Draw
+  drawBackground(ctx);
+  cells.forEach(c => drawCell(c, ctx));
+  enemies.forEach(e => e.draw(ctx));
+  player.draw(ctx);
+  drawParticles(ctx);
+  // Custom cursor
+  const cursorX = mouse.x, cursorY = mouse.y;
+  ctx.strokeStyle = '#0f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cursorX, cursorY, 15, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cursorX - 20, cursorY);
+  ctx.lineTo(cursorX - 8, cursorY);
+  ctx.moveTo(cursorX + 8, cursorY);
+  ctx.lineTo(cursorX + 20, cursorY);
+  ctx.moveTo(cursorX, cursorY - 20);
+  ctx.lineTo(cursorX, cursorY - 8);
+  ctx.moveTo(cursorX, cursorY + 8);
+  ctx.lineTo(cursorX, cursorY + 20);
+  ctx.stroke();
+  // HUD
+  updateHUD();
+  drawMinimap();
+}
+
+// ===== INITIALIZATION =====
+function init() {
+  canvas = document.getElementById('game-canvas');
+  ctx = canvas.getContext('2d');
+  miniCanvas = document.getElementById('minimap');
+  miniCtx = miniCanvas.getContext('2d');
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    miniCanvas.width = 150;
+    miniCanvas.height = 150;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  // Input handlers
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key >= '1' && e.key <= '5' && gameState === 'playing') {
+      player.useAbility(parseInt(e.key) - 1);
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  window.addEventListener('mousedown', e => { mouse.down = true; audio.init(); });
+  window.addEventListener('mouseup', e => { mouse.down = false; });
+  window.addEventListener('contextmenu', e => e.preventDefault());
+  // Buttons
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('restart-btn').addEventListener('click', startGame);
+  // Start loop
+  requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
